@@ -1,0 +1,61 @@
+use gloss.elements.*;
+
+enum ButtonType
+  button
+  submit
+end
+
+enum State {
+	On,
+	Off,
+}
+
+interface Printer { 
+	write(line string)
+}
+
+external struct Date
+ 	state: string
+		//
+	end
+
+	def unix() int
+		//
+	end
+end
+
+fn new() Date {
+  Date{}	
+}
+
+struct User
+   id: int
+   name: string
+   email: string
+   created: Date
+
+   fn render() {}
+end
+
+element Button
+  type: ButtonType = "button"
+  children: Element
+end
+
+def Button()
+
+end
+
+def render() for Button
+  let testid = nextId()
+  (
+    <button type={type} data-testid={testid}>{children}</button>
+  )
+end
+
+
+
+<Button type="submit">
+ Press Me
+</Button>
+

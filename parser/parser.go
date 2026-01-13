@@ -149,7 +149,7 @@ func (p *Parser) parseMember() *EnumMember {
 
 	// Check for optional initializer '= Value'
 	if p.match(token.ASSIGN) {
-		if p.check(token.INT) || p.check(token.STR) {
+		if p.check(token.INT) || p.check(token.STRING) {
 			val := p.advance()
 			member.Value = val.Literal
 		} else {

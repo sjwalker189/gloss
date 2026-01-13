@@ -1,7 +1,6 @@
 package lexer
 
 import (
-	"fmt"
 	"gloss/token"
 	"unicode"
 )
@@ -147,7 +146,15 @@ func (l *Lexer) tryConsumeOpenTag() ([]token.Token, bool) {
 
 	// Scan for attributes
 	for l.pos < len(l.input) {
-		l.consumeWhitespace()
+
+		if unicode.IsSpace(l.char) {
+			if l.char == '\n' {
+				l.line++
+				l.col = 0
+			}
+			l.advance()
+			continue
+		}
 
 		// Check for Tag Endings
 		if l.char == '>' {
@@ -348,36 +355,11 @@ func (l *Lexer) Tokenize() []token.Token {
 			continue
 		}
 
-		// TODO:
-		// Need to track if we are in a state that is expecting an expression or regular text.
-		// When in expression mode, capture string literal tokens like: Token{Type: token.STRING, text: "\"example\""}
-		// Otherwise capture text literal tokens like: Token{Type: token.ElementText, text: "example"}
-
-		// TODO:
-		// Need to be aware of expressions and assignments, for example:
-		// let foo = bar <= 1; // should not enter element mode
-		// let foo = bar < baz; // should not enter element mode
-		// let foo = <h1>...</h1> // should enter element mode
-		// let foo = bar <= 1 ? <A /> :  <B />
-
-		// Strings (simplified, assumes double quotes)
-		if char == '"' {
-			// l.advance() // skip opening quote
-			// start := l.pos
-			// for l.pos < len(l.input) && l.input[l.pos] != '"' {
-			// 	l.advance()
-			// }
-			// text := string(l.input[start:l.pos])
-			// if l.pos < len(l.input) {
-			// 	l.advance() // skip closing quote
-			// }
-			// tokens = append(tokens, token.Token{Type: token.QUOTE, Literal: text, Line: l.line, Column: startCol})
-		}
-
 		// Symbols
 		var tt token.TokenType
-		switch char {
+		switch l.char {
 		case '"':
+			// l.consumeStringLiteral()
 			tt = token.QUOTE
 		case '\'':
 			tt = token.TICK
@@ -413,13 +395,9 @@ func (l *Lexer) Tokenize() []token.Token {
 			tt = token.RBRACE
 		case '<':
 			if toks, ok := l.tryConsumeElement(); ok {
-				fmt.Println()
-				fmt.Println("Added tokens")
 				for _, tok := range toks {
-					fmt.Printf("%+v\n", tok)
 					tokens = append(tokens, tok)
 				}
-				fmt.Println()
 				continue
 			} else {
 				tt = token.LANGLE
@@ -431,8 +409,7 @@ func (l *Lexer) Tokenize() []token.Token {
 		}
 
 		tokens = append(tokens, token.Token{Type: tt, Literal: string(char), Line: l.line, Column: startCol})
-		l.pos++
-		l.col++
+		l.advance()
 	}
 
 	tokens = append(tokens, token.Token{Type: token.EOF, Line: l.line, Column: l.col})

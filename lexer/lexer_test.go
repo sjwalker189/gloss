@@ -147,16 +147,25 @@ func TestNextToken(t *testing.T) {
 			},
 		},
 		{
-			name: "Elements with attributes",
-			input: `
-				<button type="submit"></button>
-			`,
+			name:  "Elements with attributes",
+			input: `<button type="submit"></button><button type="reset" disabled></button>`,
 			want: []token.Token{
 				{Type: token.ELEMENT_OPEN_START, Literal: "<"},
 				{Type: token.ELEMENT_IDENT, Literal: "button"},
 				{Type: token.ELEMENT_ATTR, Literal: "type"},
 				{Type: token.ASSIGN, Literal: "="},
 				{Type: token.STRING, Literal: "\"submit\""},
+				{Type: token.ELEMENT_OPEN_END, Literal: ">"},
+				{Type: token.ELEMENT_CLOSE_START, Literal: "</"},
+				{Type: token.ELEMENT_IDENT, Literal: "button"},
+				{Type: token.ELEMENT_CLOSE_END, Literal: ">"},
+
+				{Type: token.ELEMENT_OPEN_START, Literal: "<"},
+				{Type: token.ELEMENT_IDENT, Literal: "button"},
+				{Type: token.ELEMENT_ATTR, Literal: "type"},
+				{Type: token.ASSIGN, Literal: "="},
+				{Type: token.STRING, Literal: "\"reset\""},
+				{Type: token.ELEMENT_ATTR, Literal: "disabled"},
 				{Type: token.ELEMENT_OPEN_END, Literal: ">"},
 				{Type: token.ELEMENT_CLOSE_START, Literal: "</"},
 				{Type: token.ELEMENT_IDENT, Literal: "button"},

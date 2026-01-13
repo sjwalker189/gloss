@@ -14,8 +14,9 @@ const (
 	EOF     = "EOF"
 
 	// Identifiers + literals
-	IDENT = "IDENT"
-	INT   = "INT"
+	IDENT  = "IDENT"
+	INT    = "INT"
+	STRING = "STR"
 
 	// Operators
 	ASSIGN = "="
@@ -69,6 +70,7 @@ const (
 	ELEMENT_CLOSE_END   = "EL_CLOSE_END"
 	ELEMENT_VOID_END    = "EL_VOID_END"
 	ELEMENT_IDENT       = "EL_IDENT"
+	ELEMENT_ATTR        = "EL_ATTR"
 )
 
 const (

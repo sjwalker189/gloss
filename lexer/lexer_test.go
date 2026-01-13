@@ -49,16 +49,6 @@ func TestNextToken(t *testing.T) {
 			},
 		},
 		{
-			name:  "Quote tokens",
-			input: "\"",
-			want: []token.Token{
-				{Type: token.QUOTE, Literal: "\""},
-				// {Type: token.TICK, Literal: "'"},
-				// {Type: token.BACKTICK, Literal: "`"},
-				{Type: token.EOF},
-			},
-		},
-		{
 			name:  "Keyword tokens",
 			input: "use enum struct interface extern if else switch case default continue for fn return let foo #",
 			want: []token.Token{
@@ -84,15 +74,28 @@ func TestNextToken(t *testing.T) {
 		},
 
 		{
-			name:  "Literal type tokens",
-			input: "0 100 1_000 1_000_000 1_ 1__0",
+			name: "Literal type tokens",
+			input: `
+			0
+			100
+			1_000
+			1_000_000
+			1_
+			1__0
+			"hello world"
+			"with \"quoted\""
+			`,
 			want: []token.Token{
+				// Integers
 				{Type: token.INT, Literal: "0"},
 				{Type: token.INT, Literal: "100"},
 				{Type: token.INT, Literal: "1_000"},
 				{Type: token.INT, Literal: "1_000_000"},
 				{Type: token.INT, Literal: "1_"},   // syntax error
 				{Type: token.INT, Literal: "1__0"}, // syntax error
+				// Strings
+				{Type: token.STRING, Literal: `"hello world"`},
+				{Type: token.STRING, Literal: `"with \"quoted\""`},
 				{Type: token.EOF},
 			},
 		},
@@ -170,6 +173,7 @@ func TestNextToken(t *testing.T) {
 				{Type: token.ELEMENT_CLOSE_START, Literal: "</"},
 				{Type: token.ELEMENT_IDENT, Literal: "button"},
 				{Type: token.ELEMENT_CLOSE_END, Literal: ">"},
+
 				{Type: token.EOF},
 			},
 		},

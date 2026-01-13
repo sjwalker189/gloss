@@ -53,22 +53,12 @@ func (l *Lexer) consumeDigits() {
 }
 
 func (l *Lexer) consumeStringLiteral() {
-	// record position of the opening quote
-	// startPos := l.pos
-
-	// Loop until we hit the closing quote or EOF
 	for {
 		l.advance()
 
 		// 1. Handle EOF (Unterminated string)
 		if l.char == 0 {
 			break
-			// return token.Token{
-			// 	Type:    token.ILLEGAL,
-			// 	Literal: string(l.input[]),
-			// 	Line:    startLine,
-			// 	Column:  startCol,
-			// }
 		}
 
 		// 2. Handle Escape Sequences
@@ -78,12 +68,6 @@ func (l *Lexer) consumeStringLiteral() {
 			// If we hit EOF immediately after a backslash (e.g. "abc \ )
 			if l.char == 0 {
 				break
-				// return token.Token{
-				// 	Type:    token.ILLEGAL,
-				// 	Literal: "Unterminated string literal (trailing escape)",
-				// 	Line:    startLine,
-				// 	Column:  startCol,
-				// }
 			}
 
 			continue
@@ -93,10 +77,6 @@ func (l *Lexer) consumeStringLiteral() {
 			break
 		}
 	}
-
-	// Capture the full text including the opening and closing quotes
-	// l.pos is currently at the closing quote, so we need l.pos+1 to include it
-	// text := string(l.input[startPos : l.pos+1])
 
 	// Advance past the closing quote so the main loop doesn't re-process it
 	l.advance()
@@ -284,12 +264,11 @@ func (l *Lexer) tryConsumeElement() ([]token.Token, bool) {
 func (l *Lexer) Tokenize() []token.Token {
 	var tokens []token.Token
 	for l.pos < len(l.input) {
-		char := l.input[l.pos]
 		startCol := l.col
 
 		// Skip whitespace
-		if unicode.IsSpace(rune(char)) {
-			if char == '\n' {
+		if unicode.IsSpace(l.char) {
+			if l.char == '\n' {
 				l.line++
 				l.col = 0
 			}
@@ -298,7 +277,7 @@ func (l *Lexer) Tokenize() []token.Token {
 		}
 
 		// Identifiers and Keywords
-		if unicode.IsLetter(rune(char)) {
+		if unicode.IsLetter(l.char) {
 			start := l.pos
 			for l.pos < len(l.input) && (unicode.IsLetter(rune(l.input[l.pos])) || unicode.IsDigit(rune(l.input[l.pos]))) {
 				l.advance()
@@ -348,19 +327,36 @@ func (l *Lexer) Tokenize() []token.Token {
 		}
 
 		// Numbers
-		if unicode.IsDigit(rune(char)) {
+		if unicode.IsDigit(l.char) {
 			start := l.pos
 			l.consumeDigits()
 			tokens = append(tokens, token.Token{Type: token.INT, Literal: string(l.input[start:l.pos]), Line: l.line, Column: startCol})
 			continue
 		}
 
+		// Strings
+		if l.char == '"' {
+			startCol := l.col
+			startPos := l.pos
+			startRow := l.line
+			l.consumeStringLiteral()
+			tokens = append(tokens, token.Token{Type: token.STRING, Literal: string(l.input[startPos:l.pos]), Line: startRow, Column: startCol})
+			continue
+		}
+
+		// Possible element
+		if l.char == '<' {
+			if toks, ok := l.tryConsumeElement(); ok {
+				for _, tok := range toks {
+					tokens = append(tokens, tok)
+				}
+				continue
+			}
+		}
+
 		// Symbols
 		var tt token.TokenType
 		switch l.char {
-		case '"':
-			// l.consumeStringLiteral()
-			tt = token.QUOTE
 		case '\'':
 			tt = token.TICK
 		case '`':
@@ -394,21 +390,14 @@ func (l *Lexer) Tokenize() []token.Token {
 		case '}':
 			tt = token.RBRACE
 		case '<':
-			if toks, ok := l.tryConsumeElement(); ok {
-				for _, tok := range toks {
-					tokens = append(tokens, tok)
-				}
-				continue
-			} else {
-				tt = token.LANGLE
-			}
+			tt = token.LANGLE
 		case '>':
 			tt = token.RANGLE
 		default:
 			tt = token.ILLEGAL
 		}
 
-		tokens = append(tokens, token.Token{Type: tt, Literal: string(char), Line: l.line, Column: startCol})
+		tokens = append(tokens, token.Token{Type: tt, Literal: string(l.char), Line: l.line, Column: startCol})
 		l.advance()
 	}
 

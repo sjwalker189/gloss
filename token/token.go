@@ -9,6 +9,8 @@ type Token struct {
 	Column  int
 }
 
+// TODO: Convert to iota
+
 const (
 	ILLEGAL = "ILLEGAL"
 	EOF     = "EOF"
@@ -71,6 +73,7 @@ const (
 	ELEMENT_VOID_END    = "EL_VOID_END"
 	ELEMENT_IDENT       = "EL_IDENT"
 	ELEMENT_ATTR        = "EL_ATTR"
+	ELEMENT_TEXT        = "EL_TEXT"
 )
 
 const (

@@ -7,12 +7,16 @@ import (
 
 type Lexer struct {
 	input []byte
-	pos   int
-	line  int
-	col   int
-	char  rune
 
-	// TODO: track open element tokens count to aid with inner expressions
+	// Current read positions
+	pos  int
+	line int
+	col  int
+	char rune
+
+	braceDepth    int  // Tracks nested expressions when inside elements
+	elementDepth  int  // Tracks nested elements
+	insideOpenTag bool // Tracks if we are lexing an element tag which has not yet been terminated by > or />
 }
 
 func New(input []byte) *Lexer {
@@ -20,7 +24,6 @@ func New(input []byte) *Lexer {
 		input: input,
 		char:  rune(input[0]),
 	}
-
 	return lex
 }
 
@@ -41,59 +44,7 @@ func (l *Lexer) peek() (rune, bool) {
 	return 0, false
 }
 
-func (l *Lexer) consumeDigits() {
-	for l.pos < len(l.input) {
-		ch := rune(l.input[l.pos])
-		if unicode.IsDigit(ch) || ch == '_' {
-			l.advance()
-		} else {
-			break
-		}
-	}
-}
-
-func (l *Lexer) consumeStringLiteral() {
-	for {
-		l.advance()
-
-		// 1. Handle EOF (Unterminated string)
-		if l.char == 0 {
-			break
-		}
-
-		// 2. Handle Escape Sequences
-		if l.char == '\\' {
-			l.advance()
-
-			// If we hit EOF immediately after a backslash (e.g. "abc \ )
-			if l.char == 0 {
-				break
-			}
-
-			continue
-		}
-
-		if l.char == '"' {
-			break
-		}
-	}
-
-	// Advance past the closing quote so the main loop doesn't re-process it
-	l.advance()
-}
-
-func (l *Lexer) consumeElementIdentifier() {
-	for l.pos < len(l.input) {
-		ch := rune(l.input[l.pos])
-		if unicode.IsLetter(ch) || unicode.IsDigit(ch) || ch == '.' {
-			l.advance()
-		} else {
-			break
-		}
-	}
-}
-
-func (l *Lexer) consumeWhitespace() {
+func (l *Lexer) skipWhitespace() {
 	for l.pos < len(l.input) {
 		char := l.input[l.col]
 		if unicode.IsSpace(rune(char)) {
@@ -108,99 +59,173 @@ func (l *Lexer) consumeWhitespace() {
 	}
 }
 
-func (l *Lexer) tryConsumeOpenTag() ([]token.Token, bool) {
-	tokens := []token.Token{
-		{Type: token.ELEMENT_OPEN_START, Literal: string(l.char), Line: l.line, Column: l.col},
-	}
-
-	l.advance()
-	if !unicode.IsLetter(l.char) {
-		return nil, false
-	}
-
+func (l *Lexer) readDigits() token.Token {
 	startCol := l.col
 	startPos := l.pos
 	startRow := l.line
-	l.consumeElementIdentifier()
-	tokens = append(tokens, token.Token{Type: token.ELEMENT_IDENT, Literal: string(l.input[startPos:l.pos]), Line: startRow, Column: startCol})
 
-	// Scan for attributes
 	for l.pos < len(l.input) {
-
-		if unicode.IsSpace(l.char) {
-			if l.char == '\n' {
-				l.line++
-				l.col = 0
-			}
+		if unicode.IsDigit(l.char) || l.char == '_' {
 			l.advance()
-			continue
+		} else {
+			break
 		}
-
-		// Check for Tag Endings
-		if l.char == '>' {
-			tokens = append(tokens, token.Token{Type: token.ELEMENT_OPEN_END, Literal: ">", Line: l.line, Column: l.col})
-			l.advance()
-			return tokens, true
-		}
-
-		// Check for Void Tag End "/>"
-		if l.char == '/' {
-			if next, ok := l.peek(); ok && next == '>' {
-				tokens = append(tokens, token.Token{Type: token.ELEMENT_VOID_END, Literal: "/>", Line: l.line, Column: l.col})
-				l.advance() // eat /
-				l.advance() // eat >
-				return tokens, true
-			}
-		}
-
-		// Assume Attribute Identifier
-		if unicode.IsLetter(l.char) {
-			attrStart := l.pos
-
-			// eat attribute identifier
-			for {
-				if unicode.IsLetter(l.char) {
-					l.advance()
-				} else {
-					break
-				}
-			}
-
-			attrText := string(l.input[attrStart:l.pos])
-			tokens = append(tokens, token.Token{Type: token.ELEMENT_ATTR, Literal: attrText, Line: l.line, Column: l.col})
-
-			// Check for Assignment
-			l.consumeWhitespace()
-			if l.char == '=' {
-				tokens = append(tokens, token.Token{Type: token.ASSIGN, Literal: "=", Line: l.line, Column: l.col})
-				l.advance() // eat =
-
-				// TODO: Handle Attribute Value (String "..." or Expression {...})
-				// For now, let's just consume a string if present
-				l.consumeWhitespace()
-				switch l.char {
-				case '"':
-					strStartCol := l.col
-					strStartPos := l.pos
-					strStartRow := l.line
-					l.consumeStringLiteral()
-					tokens = append(tokens, token.Token{Type: token.STRING, Literal: string(l.input[strStartPos:l.pos]), Line: strStartRow, Column: strStartCol})
-				case '{':
-					// TODO: capture expression
-				}
-			}
-			continue
-		}
-
-		// Only break if we hit something unexpected to prevent infinite loops
-		break
 	}
 
-	return nil, false
+	return token.Token{
+		Type:    token.INT,
+		Literal: string(l.input[startPos:l.pos]),
+		Line:    startRow,
+		Column:  startCol,
+	}
 }
 
-func (l *Lexer) tryConsumeClosingTag() ([]token.Token, bool) {
-	tagStartPos := l.pos
+func (l *Lexer) readString() token.Token {
+	start := l.pos
+	startCol := l.col
+	startLine := l.line
+
+	// Eat opening "
+	l.advance()
+
+	for {
+		if l.char == '"' {
+			break
+		}
+
+		if l.char == 0 {
+			// Error: Reached EOF without closing quote
+			break
+		}
+
+		// Handle Escape Characters
+		if l.char == '\\' {
+			l.advance() // Skip the backslash
+
+			if l.char != 0 {
+				// Skip the next character (the escaped char), preventing
+				// the loop from breaking if that char happens to be '"'
+				l.advance()
+			}
+			continue
+		}
+
+		l.advance()
+	}
+
+	// Eat closing "
+	l.advance()
+
+	return token.Token{
+		Type:    token.STRING,
+		Literal: string(l.input[start:l.pos]),
+		Line:    startLine,
+		Column:  startCol,
+	}
+}
+
+func (l *Lexer) readElementIdentifier() token.Token {
+	startCol := l.col
+	startPos := l.pos
+	startRow := l.line
+
+	for l.pos < len(l.input) {
+		if unicode.IsLetter(l.char) || unicode.IsDigit(l.char) || l.char == '.' {
+			l.advance()
+		} else {
+			break
+		}
+	}
+
+	return token.Token{
+		Type:    token.ELEMENT_IDENT,
+		Literal: string(l.input[startPos:l.pos]),
+		Line:    startRow,
+		Column:  startCol,
+	}
+}
+
+func (l *Lexer) readElementText() token.Token {
+	startPos := l.pos
+	startCol := l.col
+	startLine := l.line
+
+	// Consume until we hit the start of a tag '<' or an expression '{'
+	for l.pos < len(l.input) {
+		if l.char == '<' || l.char == '{' {
+			break
+		}
+
+		// Handle newlines within text
+		// TODO: Move this to l.advance()
+		if l.char == '\n' {
+			l.line++
+			l.col = 0
+			l.advance()
+			continue
+		}
+
+		l.advance()
+	}
+
+	return token.Token{
+		Type:    token.ELEMENT_TEXT,
+		Literal: string(l.input[startPos:l.pos]),
+		Line:    startLine,
+		Column:  startCol,
+	}
+}
+
+func (l *Lexer) readAttributeName() token.Token {
+	start := l.pos
+	startCol := l.col
+
+	for l.pos < len(l.input) && (unicode.IsLetter(l.char) || unicode.IsDigit(l.char) || l.char == '-') {
+		l.advance()
+	}
+
+	return token.Token{
+		Type:    token.ELEMENT_ATTR,
+		Literal: string(l.input[start:l.pos]),
+		Line:    l.line,
+		Column:  startCol,
+	}
+}
+
+func (l *Lexer) readIdentifer() token.Token {
+	start := l.pos
+	startCol := l.col
+
+	for l.pos < len(l.input) && (unicode.IsLetter(l.char) || unicode.IsDigit(l.char)) {
+		l.advance()
+	}
+
+	return token.Token{
+		Type:    token.IDENT,
+		Literal: string(l.input[start:l.pos]),
+		Line:    l.line,
+		Column:  startCol,
+	}
+}
+
+func (l *Lexer) readTagStart() []token.Token {
+	tokens := []token.Token{
+		{Type: token.ELEMENT_OPEN_START, Literal: "<", Line: l.line, Column: l.col},
+	}
+
+	l.advance() // Eat '<'
+
+	// Read Tag Name
+	tokens = append(tokens, l.readElementIdentifier())
+
+	// Update State
+	l.elementDepth++
+	l.insideOpenTag = true
+
+	return tokens
+}
+
+func (l *Lexer) tryReadTagEnd() ([]token.Token, bool) {
 	tagStartCol := l.col
 	tagStartRow := l.line
 
@@ -208,63 +233,135 @@ func (l *Lexer) tryConsumeClosingTag() ([]token.Token, bool) {
 		return nil, false
 	}
 
+	// 1. Consume the "</"
 	l.advance()
 	l.advance()
+	l.skipWhitespace()
 
-	tokens := []token.Token{
-		{Type: token.ELEMENT_CLOSE_START, Literal: string(l.input[tagStartPos:l.pos]), Line: tagStartRow, Column: tagStartCol},
-	}
-
-	if nextChar, ok := l.peek(); !ok || !unicode.IsLetter(nextChar) {
+	// 2. Read Element Name
+	if !unicode.IsLetter(l.char) {
 		return nil, false
 	}
 
-	identStartPos := l.pos
-	identStartCol := l.col
-	identStartRow := l.line
-	l.consumeElementIdentifier()
-	identText := string(l.input[identStartPos:l.pos])
+	tokens := []token.Token{
+		{
+			Type:    token.ELEMENT_CLOSE_START,
+			Literal: "</",
+			Line:    tagStartRow,
+			Column:  tagStartCol,
+		},
+		l.readElementIdentifier(),
+	}
 
-	tokens = append(tokens,
-		token.Token{Type: token.ELEMENT_IDENT, Literal: identText, Line: identStartRow, Column: identStartCol},
-	)
+	l.skipWhitespace()
 
 	if l.char != '>' {
 		return nil, false
 	}
 
 	tokens = append(tokens,
-		token.Token{Type: token.ELEMENT_CLOSE_END, Literal: string(l.char), Line: l.line, Column: l.col},
+		token.Token{
+			Type:    token.ELEMENT_CLOSE_END,
+			Literal: ">",
+			Line:    l.line,
+			Column:  l.col,
+		},
 	)
 
-	// Don't process < again
-	l.advance()
+	l.elementDepth-- // Decrement depth
+	l.advance()      // Eat '>'
 
 	return tokens, true
-
-}
-
-func (l *Lexer) tryConsumeElement() ([]token.Token, bool) {
-	nextChar, ok := l.peek()
-	if !ok {
-		return nil, false
-	}
-
-	if nextChar == '/' {
-		return l.tryConsumeClosingTag()
-	}
-
-	if unicode.IsLetter(nextChar) {
-		return l.tryConsumeOpenTag()
-	}
-
-	return nil, false
 }
 
 func (l *Lexer) Tokenize() []token.Token {
 	var tokens []token.Token
 	for l.pos < len(l.input) {
 		startCol := l.col
+
+		// ---------------------------------------------------------
+		//  MODE 1: ELEMENT CONTENT
+		// ---------------------------------------------------------
+		// If we are inside an element, but NOT inside an expression block ({...}),
+		// we treat content as raw text.
+		if l.elementDepth > 0 && l.braceDepth == 0 && !l.insideOpenTag {
+			// If we hit '<', check if it's a valid tag (start or close)
+			// If we hit '{', we switch to Code Mode (handled below in standard switch)
+			// Otherwise, it is text.
+			if l.char != '<' && l.char != '{' {
+				tokens = append(tokens, l.readElementText())
+				continue
+			}
+		}
+
+		// ----------------------------------------------------------------
+		// MODE 2: ATTRIBUTE SCANNING
+		// Inside an opening tag definition <div ... >
+		// But NOT inside an attribute expression like prop={...}
+		// ----------------------------------------------------------------
+		if l.insideOpenTag && l.braceDepth == 0 {
+			// 1. Ignore whitespace
+			if unicode.IsSpace(l.char) {
+				if l.char == '\n' {
+					l.line++
+					l.col = 0
+				}
+				l.advance()
+				continue
+			}
+
+			// 2.a Open Tag Endings
+			if l.char == '>' {
+				tokens = append(tokens, token.Token{Type: token.ELEMENT_OPEN_END, Literal: ">", Line: l.line, Column: startCol})
+				l.insideOpenTag = false
+				l.advance()
+				continue
+			}
+
+			// 2.b Void Tag Endings
+			if l.char == '/' {
+				if next, ok := l.peek(); ok && next == '>' {
+					tokens = append(tokens, token.Token{Type: token.ELEMENT_VOID_END, Literal: "/>", Line: l.line, Column: startCol})
+					l.insideOpenTag = false
+					l.elementDepth--
+					l.advance()
+					l.advance()
+					continue
+				}
+			}
+
+			// 3. Expressions start
+			// We emit the brace, increment depth, and let the NEXT loop iteration handle the inside as Standard Code.
+			if l.char == '{' {
+				tokens = append(tokens, token.Token{Type: token.LBRACE, Literal: "{", Line: l.line, Column: startCol})
+				l.braceDepth++
+				l.advance()
+				continue
+			}
+
+			// 4. Assignments
+			if l.char == '=' {
+				tokens = append(tokens, token.Token{Type: token.ASSIGN, Literal: "=", Line: l.line, Column: startCol})
+				l.advance()
+				continue
+			}
+
+			// 5. String Literal Attribute Values (e.g. class="foo")
+			if l.char == '"' {
+				tokens = append(tokens, l.readString())
+				continue
+			}
+
+			// 6. Attribute Names (Ident)
+			if unicode.IsLetter(l.char) {
+				tokens = append(tokens, l.readAttributeName())
+				continue
+			}
+		}
+
+		// ---------------------------------------------------------
+		// 3. STANDARD CODE MODE
+		// ---------------------------------------------------------
 
 		// Skip whitespace
 		if unicode.IsSpace(l.char) {
@@ -278,78 +375,75 @@ func (l *Lexer) Tokenize() []token.Token {
 
 		// Identifiers and Keywords
 		if unicode.IsLetter(l.char) {
-			start := l.pos
-			for l.pos < len(l.input) && (unicode.IsLetter(rune(l.input[l.pos])) || unicode.IsDigit(rune(l.input[l.pos]))) {
-				l.advance()
-			}
+			identToken := l.readIdentifer()
 
-			text := string(l.input[start:l.pos])
-			switch text {
+			switch identToken.Literal {
 			case "use":
-				tokens = append(tokens, token.Token{Type: token.IMPORT, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.IMPORT
 			case "enum":
-				tokens = append(tokens, token.Token{Type: token.ENUM, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.ENUM
 			case "struct":
-				tokens = append(tokens, token.Token{Type: token.STRUCT, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.STRUCT
 			case "interface":
-				tokens = append(tokens, token.Token{Type: token.IFACE, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.IFACE
 			case "extern":
-				tokens = append(tokens, token.Token{Type: token.EXTERN, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.EXTERN
 			case "end":
-				tokens = append(tokens, token.Token{Type: token.END, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.END
 			case "if":
-				tokens = append(tokens, token.Token{Type: token.IF, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.IF
 			case "else":
-				tokens = append(tokens, token.Token{Type: token.ELSE, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.ELSE
 			case "switch":
-				tokens = append(tokens, token.Token{Type: token.SWITCH, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.SWITCH
 			case "case":
-				tokens = append(tokens, token.Token{Type: token.CASE, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.CASE
 			case "default":
-				tokens = append(tokens, token.Token{Type: token.DEFAULT, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.DEFAULT
 			case "for":
-				tokens = append(tokens, token.Token{Type: token.FOR, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.FOR
 			case "continue":
-				tokens = append(tokens, token.Token{Type: token.CONTINUE, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.CONTINUE
 			case "break":
-				tokens = append(tokens, token.Token{Type: token.BREAK, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.BREAK
 			case "return":
-				tokens = append(tokens, token.Token{Type: token.RETURN, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.RETURN
 			case "let":
-				tokens = append(tokens, token.Token{Type: token.LET, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.LET
 			case "fn":
-				tokens = append(tokens, token.Token{Type: token.FUNC, Literal: text, Line: l.line, Column: startCol})
-			default:
-				tokens = append(tokens, token.Token{Type: token.IDENT, Literal: text, Line: l.line, Column: startCol})
+				identToken.Type = token.FUNC
 			}
 
+			tokens = append(tokens, identToken)
 			continue
 		}
 
 		// Numbers
 		if unicode.IsDigit(l.char) {
-			start := l.pos
-			l.consumeDigits()
-			tokens = append(tokens, token.Token{Type: token.INT, Literal: string(l.input[start:l.pos]), Line: l.line, Column: startCol})
+			tokens = append(tokens, l.readDigits())
 			continue
 		}
 
 		// Strings
 		if l.char == '"' {
-			startCol := l.col
-			startPos := l.pos
-			startRow := l.line
-			l.consumeStringLiteral()
-			tokens = append(tokens, token.Token{Type: token.STRING, Literal: string(l.input[startPos:l.pos]), Line: startRow, Column: startCol})
+			tokens = append(tokens, l.readString())
 			continue
 		}
 
-		// Possible element
+		// Check for Tag Start
 		if l.char == '<' {
-			if toks, ok := l.tryConsumeElement(); ok {
-				for _, tok := range toks {
-					tokens = append(tokens, tok)
+			// Check if it is a closing tag </...
+			next, hasNext := l.peek()
+			if hasNext && next == '/' {
+				if toks, ok := l.tryReadTagEnd(); ok {
+					tokens = append(tokens, toks...)
+					continue
 				}
+			}
+			// Check if it is an opening tag <div...
+			// Must ensure it's not a Less Than operator (e.g. "if a < b")
+			if hasNext && unicode.IsLetter(next) {
+				tokens = append(tokens, l.readTagStart()...)
 				continue
 			}
 		}
@@ -387,8 +481,12 @@ func (l *Lexer) Tokenize() []token.Token {
 			tt = token.RPAREN
 		case '{':
 			tt = token.LBRACE
+			l.braceDepth++
 		case '}':
 			tt = token.RBRACE
+			if l.braceDepth > 0 {
+				l.braceDepth--
+			}
 		case '<':
 			tt = token.LANGLE
 		case '>':

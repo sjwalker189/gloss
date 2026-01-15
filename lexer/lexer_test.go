@@ -137,10 +137,8 @@ func TestNextToken(t *testing.T) {
 			},
 		},
 		{
-			name: "Elements with attributes",
-			input: `
-				<input disabled />
-			`,
+			name:  "Elements with attributes",
+			input: `<input disabled />`,
 			want: []token.Token{
 				{Type: token.ELEMENT_OPEN_START, Literal: "<"},
 				{Type: token.ELEMENT_IDENT, Literal: "input"},
@@ -177,6 +175,66 @@ func TestNextToken(t *testing.T) {
 				{Type: token.EOF},
 			},
 		},
+		{
+			name:  "Elements with inner content",
+			input: `<h1>Hello, <b>World</b>!</h1>`,
+			want: []token.Token{
+				{Type: token.ELEMENT_OPEN_START, Literal: "<"},
+				{Type: token.ELEMENT_IDENT, Literal: "h1"},
+				{Type: token.ELEMENT_OPEN_END, Literal: ">"},
+				{Type: token.ELEMENT_TEXT, Literal: "Hello, "},
+				{Type: token.ELEMENT_OPEN_START, Literal: "<"},
+				{Type: token.ELEMENT_IDENT, Literal: "b"},
+				{Type: token.ELEMENT_OPEN_END, Literal: ">"},
+				{Type: token.ELEMENT_TEXT, Literal: "World"},
+				{Type: token.ELEMENT_CLOSE_START, Literal: "</"},
+				{Type: token.ELEMENT_IDENT, Literal: "b"},
+				{Type: token.ELEMENT_CLOSE_END, Literal: ">"},
+				{Type: token.ELEMENT_TEXT, Literal: "!"},
+				{Type: token.ELEMENT_CLOSE_START, Literal: "</"},
+				{Type: token.ELEMENT_IDENT, Literal: "h1"},
+				{Type: token.ELEMENT_CLOSE_END, Literal: ">"},
+				{Type: token.EOF},
+			},
+		},
+		{
+			name:  "Elements with inner expressions",
+			input: `<h1>{message}</h1><button type="button" disabled={true}>Hello, {name}!</button>`,
+			want: []token.Token{
+				{Type: token.ELEMENT_OPEN_START, Literal: "<"},
+				{Type: token.ELEMENT_IDENT, Literal: "h1"},
+				{Type: token.ELEMENT_OPEN_END, Literal: ">"},
+				{Type: token.LBRACE, Literal: "{"},
+				{Type: token.IDENT, Literal: "message"},
+				{Type: token.RBRACE, Literal: "}"},
+				{Type: token.ELEMENT_CLOSE_START, Literal: "</"},
+				{Type: token.ELEMENT_IDENT, Literal: "h1"},
+				{Type: token.ELEMENT_CLOSE_END, Literal: ">"},
+
+				{Type: token.ELEMENT_OPEN_START, Literal: "<"},
+				{Type: token.ELEMENT_IDENT, Literal: "button"},
+				{Type: token.ELEMENT_ATTR, Literal: "type"},
+				{Type: token.ASSIGN, Literal: "="},
+				{Type: token.STRING, Literal: `"button"`},
+				{Type: token.ELEMENT_ATTR, Literal: "disabled"},
+				{Type: token.ASSIGN, Literal: "="},
+				{Type: token.LBRACE, Literal: "{"},
+				{Type: token.IDENT, Literal: "true"},
+				{Type: token.RBRACE, Literal: "}"},
+				{Type: token.ELEMENT_OPEN_END, Literal: ">"},
+
+				{Type: token.ELEMENT_TEXT, Literal: "Hello, "},
+				{Type: token.LBRACE, Literal: "{"},
+				{Type: token.IDENT, Literal: "name"},
+				{Type: token.RBRACE, Literal: "}"},
+				{Type: token.ELEMENT_TEXT, Literal: "!"},
+
+				{Type: token.ELEMENT_CLOSE_START, Literal: "</"},
+				{Type: token.ELEMENT_IDENT, Literal: "button"},
+				{Type: token.ELEMENT_CLOSE_END, Literal: ">"},
+				{Type: token.EOF},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -184,7 +242,7 @@ func TestNextToken(t *testing.T) {
 			got := New([]byte(tt.input)).Tokenize()
 
 			if diff := cmp.Diff(tt.want, got, cmpOpts...); diff != "" {
-				t.Errorf("Tokenize() mismatch (-want +got):\n%s", diff)
+				t.Errorf("Tokenize() mismatch (-want +got):\nInput:%s\n%s", tt.input, diff)
 			}
 		})
 	}

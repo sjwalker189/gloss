@@ -17,6 +17,8 @@ type Lexer struct {
 	braceDepth    int  // Tracks nested expressions when inside elements
 	elementDepth  int  // Tracks nested elements
 	insideOpenTag bool // Tracks if we are lexing an element tag which has not yet been terminated by > or />
+
+	tokenBuffer []token.Token
 }
 
 func New(input []byte) *Lexer {
@@ -274,8 +276,14 @@ func (l *Lexer) tryReadTagEnd() ([]token.Token, bool) {
 	return tokens, true
 }
 
-func (l *Lexer) Tokenize() []token.Token {
-	var tokens []token.Token
+func (l *Lexer) NextToken() token.Token {
+	// Drain buffer
+	if len(l.tokenBuffer) > 0 {
+		t := l.tokenBuffer[0]
+		l.tokenBuffer = l.tokenBuffer[1:]
+		return t
+	}
+
 	for l.pos < len(l.input) {
 		startCol := l.col
 
@@ -289,8 +297,7 @@ func (l *Lexer) Tokenize() []token.Token {
 			// If we hit '{', we switch to Code Mode (handled below in standard switch)
 			// Otherwise, it is text.
 			if l.char != '<' && l.char != '{' {
-				tokens = append(tokens, l.readElementText())
-				continue
+				return l.readElementText()
 			}
 		}
 
@@ -312,50 +319,48 @@ func (l *Lexer) Tokenize() []token.Token {
 
 			// 2.a Open Tag Endings
 			if l.char == '>' {
-				tokens = append(tokens, token.Token{Type: token.ELEMENT_OPEN_END, Literal: ">", Line: l.line, Column: startCol})
+				t := token.Token{Type: token.ELEMENT_OPEN_END, Literal: ">", Line: l.line, Column: startCol}
 				l.insideOpenTag = false
 				l.advance()
-				continue
+				return t
 			}
 
 			// 2.b Void Tag Endings
 			if l.char == '/' {
 				if next, ok := l.peek(); ok && next == '>' {
-					tokens = append(tokens, token.Token{Type: token.ELEMENT_VOID_END, Literal: "/>", Line: l.line, Column: startCol})
+					t := token.Token{Type: token.ELEMENT_VOID_END, Literal: "/>", Line: l.line, Column: startCol}
 					l.insideOpenTag = false
 					l.elementDepth--
 					l.advance()
 					l.advance()
-					continue
+					return t
 				}
 			}
 
 			// 3. Expressions start
 			// We emit the brace, increment depth, and let the NEXT loop iteration handle the inside as Standard Code.
 			if l.char == '{' {
-				tokens = append(tokens, token.Token{Type: token.LBRACE, Literal: "{", Line: l.line, Column: startCol})
+				t := token.Token{Type: token.LBRACE, Literal: "{", Line: l.line, Column: startCol}
 				l.braceDepth++
 				l.advance()
-				continue
+				return t
 			}
 
 			// 4. Assignments
 			if l.char == '=' {
-				tokens = append(tokens, token.Token{Type: token.ASSIGN, Literal: "=", Line: l.line, Column: startCol})
+				t := token.Token{Type: token.ASSIGN, Literal: "=", Line: l.line, Column: startCol}
 				l.advance()
-				continue
+				return t
 			}
 
 			// 5. String Literal Attribute Values (e.g. class="foo")
 			if l.char == '"' {
-				tokens = append(tokens, l.readString())
-				continue
+				return l.readString()
 			}
 
 			// 6. Attribute Names (Ident)
 			if unicode.IsLetter(l.char) {
-				tokens = append(tokens, l.readAttributeName())
-				continue
+				return l.readAttributeName()
 			}
 		}
 
@@ -414,20 +419,17 @@ func (l *Lexer) Tokenize() []token.Token {
 				identToken.Type = token.FUNC
 			}
 
-			tokens = append(tokens, identToken)
-			continue
+			return identToken
 		}
 
 		// Numbers
 		if unicode.IsDigit(l.char) {
-			tokens = append(tokens, l.readDigits())
-			continue
+			return l.readDigits()
 		}
 
 		// Strings
 		if l.char == '"' {
-			tokens = append(tokens, l.readString())
-			continue
+			return l.readString()
 		}
 
 		// Check for Tag Start
@@ -436,15 +438,18 @@ func (l *Lexer) Tokenize() []token.Token {
 			next, hasNext := l.peek()
 			if hasNext && next == '/' {
 				if toks, ok := l.tryReadTagEnd(); ok {
-					tokens = append(tokens, toks...)
-					continue
+					t := toks[0]
+					l.tokenBuffer = append(l.tokenBuffer, toks[1:]...)
+					return t
 				}
 			}
 			// Check if it is an opening tag <div...
 			// Must ensure it's not a Less Than operator (e.g. "if a < b")
 			if hasNext && unicode.IsLetter(next) {
-				tokens = append(tokens, l.readTagStart()...)
-				continue
+				toks := l.readTagStart()
+				t := toks[0]
+				l.tokenBuffer = append(l.tokenBuffer, toks[1:]...)
+				return t
 			}
 		}
 
@@ -495,11 +500,10 @@ func (l *Lexer) Tokenize() []token.Token {
 			tt = token.ILLEGAL
 		}
 
-		tokens = append(tokens, token.Token{Type: tt, Literal: string(l.char), Line: l.line, Column: startCol})
+		t := token.Token{Type: tt, Literal: string(l.char), Line: l.line, Column: startCol}
 		l.advance()
+		return t
 	}
 
-	tokens = append(tokens, token.Token{Type: token.EOF, Line: l.line, Column: l.col})
-
-	return tokens
+	return token.Token{Type: token.EOF, Line: l.line, Column: l.col}
 }

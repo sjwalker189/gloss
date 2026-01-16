@@ -235,13 +235,36 @@ func TestNextToken(t *testing.T) {
 				{Type: token.EOF},
 			},
 		},
+		{
+			name:  "Function declaration",
+			input: `fn print() {}`,
+			want: []token.Token{
+				{Type: token.FUNC, Literal: "fn"},
+				{Type: token.IDENT, Literal: "print"},
+				{Type: token.LPAREN, Literal: "("},
+				{Type: token.RPAREN, Literal: ")"},
+				{Type: token.LBRACE, Literal: "{"},
+				{Type: token.RBRACE, Literal: "}"},
+				{Type: token.EOF},
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := New([]byte(tt.input)).Tokenize()
+			lex := New([]byte(tt.input))
 
-			if diff := cmp.Diff(tt.want, got, cmpOpts...); diff != "" {
+			var tokens []token.Token
+
+			for {
+				t := lex.NextToken()
+				tokens = append(tokens, t)
+				if t.Type == token.EOF {
+					break
+				}
+			}
+
+			if diff := cmp.Diff(tt.want, tokens, cmpOpts...); diff != "" {
 				t.Errorf("Tokenize() mismatch (-want +got):\nInput:%s\n%s", tt.input, diff)
 			}
 		})

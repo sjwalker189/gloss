@@ -417,6 +417,8 @@ func (l *Lexer) NextToken() token.Token {
 				identToken.Type = token.LET
 			case "fn":
 				identToken.Type = token.FUNC
+			case "true", "false":
+				identToken.Type = token.BOOL
 			}
 
 			return identToken

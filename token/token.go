@@ -19,6 +19,7 @@ const (
 	IDENT  = "IDENT"
 	INT    = "INT"
 	STRING = "STR"
+	BOOL   = "BOOL"
 
 	// Operators
 	ASSIGN = "ASSIGN"
@@ -28,6 +29,10 @@ const (
 	DIV    = "DIV"
 	MOD    = "MOD"
 	AND    = "AND"
+	EQ     = "EQ"
+	NOT_EQ = "NOT_EQ"
+	LT     = "LESS_THAN"
+	GT     = "GREATER_THAN"
 
 	// Delimiters
 	PERIOD    = "PERIOD"

@@ -28,18 +28,45 @@ type Identifier struct {
 	BaseNode
 	Token token.Token
 	Name  string
-	Type  string
 }
 
-type Expression struct {
-	BaseNode
-	// TODO
+type Expression interface {
+	expressionNode()
 }
+
+type InfixExpression struct {
+	Left     Expression
+	Right    Expression
+	Operator string
+}
+
+type PrefixExpression struct {
+	Right    Expression
+	Operator string
+}
+
+type ParenExpression struct {
+	Expression Expression
+}
+
+type CallExpression struct {
+	Function  Expression
+	Arguments []Expression
+}
+
+func (e InfixExpression) expressionNode()  {}
+func (e PrefixExpression) expressionNode() {}
+func (e ParenExpression) expressionNode()  {}
+func (e CallExpression) expressionNode()   {}
+func (e IntegerLiteral) expressionNode()   {}
+func (e StringLiteral) expressionNode()    {}
+func (e Boolean) expressionNode()          {}
+func (e Identifier) expressionNode()       {}
 
 type LetStatement struct {
 	BaseNode
 	Token token.Token
-	Name  Identifier
+	Name  *Identifier
 	Value Expression
 }
 
@@ -69,4 +96,19 @@ type Func struct {
 
 type ReturnStatement struct {
 	BaseNode
+}
+
+type IntegerLiteral struct {
+	BaseNode
+	Value int64
+}
+
+type StringLiteral struct {
+	BaseNode
+	Value string
+}
+
+type Boolean struct {
+	BaseNode
+	Value bool
 }

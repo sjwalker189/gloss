@@ -1,0 +1,57 @@
+enum Switch {
+	On,
+	Off,
+}
+
+struct User {
+	name: string
+	email: string
+}
+
+struct Profile {
+	provider: string
+	name: stirng
+}
+
+union User {
+	User(User),
+	Profile(Profile),
+}
+
+enum Message {
+	Increment = 1,
+	Decrement,
+}
+
+union ActionMessage {
+	Create { name: string },
+	Update { id: int, name: string },
+	Delete (int, bool), // tuple of (id, archive)
+	Refresh,
+}
+
+fn main(name: string) Element {
+  let value = Example.a(5)
+  switch value {
+	.a: text => print(text)
+	.b: n => print(n*2)
+	_: => _
+  }
+
+  let value = User::User({
+  	name: "Sam",
+  	email: "sjwalker189@gmail.com",
+  })
+
+  let result = switch value {
+	.User: user => print_user(user),
+	.Profile: profile => print_profile(profile),
+  }
+
+  return <div>
+	{switch value {
+	    User(user) => <UserCard {user} />
+	    Profile(profile) => <ProfileCard {profile} />
+	}}
+  </div>
+}

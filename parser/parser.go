@@ -90,10 +90,12 @@ func (p *Parser) nextToken() {
 
 func (p *Parser) parseDeclarations() ast.Node {
 	switch p.curToken.Type {
-	case token.FUNC:
-		return p.parseFunc()
+	case token.ENUM:
+		return p.parseEnum()
 	case token.LET:
 		return p.parseLetStatement()
+	case token.FUNC:
+		return p.parseFunc()
 	default:
 		return nil
 	}
@@ -220,9 +222,10 @@ func (p *Parser) parseStatement() ast.Node {
 }
 
 func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
-	return &ast.ReturnStatement{
-		// Value: p.parseExpression(),
-	}
+	stmt := &ast.ReturnStatement{}
+	p.nextToken()
+	stmt.Value = p.parseExpression(LOWEST)
+	return stmt
 }
 
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
@@ -242,6 +245,178 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	}
 
 	return block
+}
+
+func (p *Parser) parseEnum() *ast.Enum {
+	enum := &ast.Enum{}
+
+	if !p.expectNext(token.IDENT, "Expected name") {
+		return nil
+	}
+
+	enum.Name = p.curToken.Literal
+
+	if !p.expectNext(token.LBRACE, "Expected '{'") {
+		// TODO: Recover
+		p.nextToken()
+	}
+
+	var curIntValue int64
+
+	for p.curToken.Type != token.EOF && p.curToken.Type != token.RBRACE {
+		if m := p.parseEnumMember(); m != nil {
+			integer, ok := m.Value.(*ast.IntegerLiteral)
+			if ok {
+				m.IntValue = integer.Value
+				curIntValue = integer.Value
+			} else {
+				m.IntValue = curIntValue
+			}
+			enum.Members = append(enum.Members, m)
+			curIntValue++
+		}
+		p.nextToken()
+	}
+
+	return enum
+}
+
+func (p *Parser) parseEnumMember() *ast.EnumMember {
+	if p.curToken.Type != token.IDENT {
+		return nil
+	}
+
+	m := &ast.EnumMember{
+		Name: p.curToken.Literal,
+	}
+
+	if p.peekToken.Type == token.ASSIGN {
+		p.nextToken()
+		p.nextToken()
+		switch p.curToken.Type {
+		case token.STRING:
+			m.Value = p.parseStringLiteral()
+		case token.INT:
+			m.Value = p.parseIntegerLiteral()
+		default:
+			// TODO: Recover
+			p.Diagnostics.Error(p.curToken, "Expected an int or string value")
+			p.nextToken()
+		}
+	}
+
+	if !p.expectNext(token.COMMA, "Missing comma") {
+		// TODO: Recover
+		p.nextToken()
+	}
+
+	return m
+}
+
+func (p *Parser) parseUnion() *ast.Union {
+	union := &ast.Union{}
+
+	if !p.expectNext(token.IDENT, "Expected name") {
+		return nil
+	}
+
+	union.Name = p.curToken.Literal
+
+	if !p.expectNext(token.LBRACE, "Expected '{'") {
+		// TODO: Recover
+		p.nextToken()
+	}
+
+	for p.curToken.Type != token.EOF && p.curToken.Type != token.RBRACE {
+		if m := p.parseUnionField(); m != nil {
+			union.Fields = append(union.Fields, m)
+		}
+		p.nextToken()
+	}
+
+	return union
+}
+
+func (p *Parser) parseUnionField() *ast.UnionField {
+	if p.curToken.Type != token.IDENT {
+		return nil
+	}
+
+	m := &ast.UnionField{
+		Name: p.curToken.Literal,
+	}
+
+	p.nextToken()
+
+	switch p.peekToken.Type {
+	case token.COMMA:
+		return m
+	case token.LBRACE:
+		// m.Type = p.parseStructBody()
+	case token.LPAREN:
+		// m.Type = p.parseTuple()
+	case token.IDENT, token.BOOL:
+		// m.Type = p.parseType()
+	default:
+		// TODO: Recover
+		p.nextToken()
+	}
+
+	if !p.expectNext(token.COMMA, "Missing comma") {
+		// TODO: Recover
+		p.nextToken()
+	}
+
+	return m
+}
+
+func (p *Parser) parseTupleType() *ast.TupleLiteral {
+	tuple := &ast.Tuple{}
+	p.nextToken()
+
+	for p.curToken.Type != token.EOF && p.curToken.Type != token.RPAREN {
+		if t := p.parseType(); t != nil {
+			tuple.Fields = append(tuple.Fields, t)
+		}
+
+		p.nextToken()
+		if p.curToken.Type == token.RPAREN {
+			break
+		}
+
+		if p.curToken.Type == token.COMMA {
+			p.nextToken()
+			if p.curToken.Type == token.RPAREN {
+				// TODO: Support trailing commas in tuples?
+			}
+		}
+	}
+
+	p.nextToken() // eat )
+
+	return tuple
+}
+
+func (p *Parser) parseType() *ast.Type {
+	// TODO: token.TYPE_BOOL meaning "bool" instead of BOOL which is literal "true" and "false"
+	// TODO: need to lex more explict tokens for types
+	// TODO: need to handle pointer types? or always wrap in Maybe<T>?
+	if p.curToken.Type != token.IDENT {
+		return nil
+	}
+
+	t := &ast.Type{
+		Name: p.curToken.Literal,
+	}
+
+	switch p.curToken.Literal {
+	case "bool", "int", "string":
+		return t
+	}
+
+	// check for type paramters, for example: Either<A,B>
+	p.nextToken()
+	return t
 }
 
 func (p *Parser) parseIdent() ast.Expression {
@@ -302,7 +477,6 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	// 1. Parse the "Left" side (Prefix)
 	// e.g., in "-1 + 2", this parses "-1"
 	prefix := p.prefixParseFunc[p.curToken.Type]
-	fmt.Printf("parse expr for %s\n", p.curToken.Type)
 	if prefix == nil {
 		return nil
 	}

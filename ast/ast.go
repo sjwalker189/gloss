@@ -54,15 +54,6 @@ type CallExpression struct {
 	Arguments []Expression
 }
 
-func (e InfixExpression) expressionNode()  {}
-func (e PrefixExpression) expressionNode() {}
-func (e ParenExpression) expressionNode()  {}
-func (e CallExpression) expressionNode()   {}
-func (e IntegerLiteral) expressionNode()   {}
-func (e StringLiteral) expressionNode()    {}
-func (e Boolean) expressionNode()          {}
-func (e Identifier) expressionNode()       {}
-
 type LetStatement struct {
 	BaseNode
 	Token token.Token
@@ -83,7 +74,34 @@ type Parameter struct {
 }
 
 type Type struct {
+	BaseNode
+	Name       string
+	Parameters []*Type
+}
+
+type Enum struct {
+	BaseNode
+	Name    string
+	Members []*EnumMember
+}
+
+type EnumMember struct {
+	BaseNode
+	Name     string
+	IntValue int64
+	Value    Expression
+}
+
+type Union struct {
+	BaseNode
+	Name   string
+	Fields []*UnionField
+}
+
+type UnionField struct {
+	BaseNode
 	Name string
+	Type *Type
 }
 
 type Func struct {
@@ -96,11 +114,13 @@ type Func struct {
 
 type ReturnStatement struct {
 	BaseNode
+	Value Expression
 }
 
 type IntegerLiteral struct {
 	BaseNode
-	Value int64
+	Value  int64
+	Signed bool
 }
 
 type StringLiteral struct {
@@ -112,3 +132,18 @@ type Boolean struct {
 	BaseNode
 	Value bool
 }
+
+type Tuple struct {
+	BaseNode
+	Items []*Type
+}
+
+// Denote expression nodes
+func (e InfixExpression) expressionNode()  {}
+func (e PrefixExpression) expressionNode() {}
+func (e ParenExpression) expressionNode()  {}
+func (e CallExpression) expressionNode()   {}
+func (e IntegerLiteral) expressionNode()   {}
+func (e StringLiteral) expressionNode()    {}
+func (e Boolean) expressionNode()          {}
+func (e Identifier) expressionNode()       {}

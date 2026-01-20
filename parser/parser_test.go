@@ -75,25 +75,125 @@ func TestParseFunction(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "returns void",
+			input: `fn withreturn() { return }`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Func{
+						Name: "withreturn",
+						Body: &ast.BlockStatement{
+							Statements: []ast.Node{
+								&ast.ReturnStatement{
+									Value: nil,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 
-		//{
-		// 	name:  "returns literal",
-		// 	input: `fn withreturn() { return }`,
-		// 	want: ast.SourceFile{
-		// 		Declarations: []ast.Node{
-		// 			&ast.Func{
-		// 				Name: "withreturn",
-		// 				Body: &ast.BlockStatement{
-		// 					Statements: []ast.Node{
-		// 						&ast.ReturnStatement{
-		// 							// Value: nil,
-		// 						},
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
+		{
+			name:  "returns string",
+			input: `fn withreturn() { return "a" }`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Func{
+						Name: "withreturn",
+						Body: &ast.BlockStatement{
+							Statements: []ast.Node{
+								&ast.ReturnStatement{
+									Value: &ast.StringLiteral{
+										Value: "a",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "returns int",
+			input: `fn withreturn() { return 0 }`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Func{
+						Name: "withreturn",
+						Body: &ast.BlockStatement{
+							Statements: []ast.Node{
+								&ast.ReturnStatement{
+									Value: &ast.IntegerLiteral{
+										Value: 0,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "returns expression",
+			input: `fn withreturn() { return 2 + 3 }`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Func{
+						Name: "withreturn",
+						Body: &ast.BlockStatement{
+							Statements: []ast.Node{
+								&ast.ReturnStatement{
+									Value: &ast.InfixExpression{
+										Left:     &ast.IntegerLiteral{Value: 2},
+										Right:    &ast.IntegerLiteral{Value: 3},
+										Operator: "+",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "returns boolean",
+			input: `fn withreturn() { return true }`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Func{
+						Name: "withreturn",
+						Body: &ast.BlockStatement{
+							Statements: []ast.Node{
+								&ast.ReturnStatement{
+									Value: &ast.Boolean{Value: true},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "returns paren expression",
+			input: `fn withreturn() { return (2) }`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Func{
+						Name: "withreturn",
+						Body: &ast.BlockStatement{
+							Statements: []ast.Node{
+								&ast.ReturnStatement{
+									Value: &ast.ParenExpression{
+										Expression: &ast.IntegerLiteral{Value: 2},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -172,7 +272,7 @@ func TestParseLetStatement(t *testing.T) {
 		},
 
 		{
-			name: "Assign sum expression",
+			name: "Assign expression",
 			input: `
 				let five = 2 + 3
 				let ten = (5 + 5)
@@ -226,7 +326,8 @@ func TestParseLetStatement(t *testing.T) {
 							Name: "result",
 						},
 						Value: &ast.CallExpression{
-							Function: &ast.Identifier{Name: "calc"},
+							Function:  &ast.Identifier{Name: "calc"},
+							Arguments: []ast.Expression{},
 						},
 					},
 				},
@@ -246,4 +347,148 @@ func TestParseLetStatement(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseEnumStatement(t *testing.T) {
+	cmpOpts := []cmp.Option{
+		// cmpopts.IgnoreFields(token.Token{}, "Line", "Column"),
+	}
+
+	tests := []struct {
+		name  string
+		input string
+		want  ast.SourceFile
+	}{
+		{
+			name:  "Naked Enum",
+			input: `enum Message { Increment, Decrement, }`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Enum{
+						Name: "Message",
+						Members: []*ast.EnumMember{
+							{Name: "Increment", IntValue: 0, Value: nil},
+							{Name: "Decrement", IntValue: 1, Value: nil},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "Backed Enum",
+			input: `enum Message { Increment = 0, Decrement = 1, }`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Enum{
+						Name: "Message",
+						Members: []*ast.EnumMember{
+							{Name: "Increment", IntValue: 0, Value: &ast.IntegerLiteral{Value: 0}},
+							{Name: "Decrement", IntValue: 1, Value: &ast.IntegerLiteral{Value: 1}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "Backed Enum with inferred values",
+			input: `enum Message { Increment = 1, Decrement, }`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Enum{
+						Name: "Message",
+						Members: []*ast.EnumMember{
+							{Name: "Increment", IntValue: 1, Value: &ast.IntegerLiteral{Value: 1}},
+							{Name: "Decrement", IntValue: 2, Value: nil},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "Backed Enum with mixed values",
+			input: `enum Message { Increment = 1, Decrement = "down", Clear, }`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Enum{
+						Name: "Message",
+						Members: []*ast.EnumMember{
+							{Name: "Increment", IntValue: 1, Value: &ast.IntegerLiteral{Value: 1}},
+							{Name: "Decrement", IntValue: 2, Value: &ast.StringLiteral{Value: "down"}},
+							{Name: "Clear", IntValue: 3, Value: nil},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewParser(lexer.New([]byte(tt.input)))
+			got := p.Parse()
+			for _, msg := range p.Diagnostics.Items {
+				fmt.Println(msg.Text)
+			}
+			if diff := cmp.Diff(tt.want, got, cmpOpts...); diff != "" {
+				t.Errorf("parser.Parse() mismatch (-want +got):\nInput:%s\n%s", tt.input, diff)
+			}
+		})
+	}
+}
+
+func TestParseUnionStatement(t *testing.T) {
+	cmpOpts := []cmp.Option{
+		// cmpopts.IgnoreFields(token.Token{}, "Line", "Column"),
+	}
+
+	tests := []struct {
+		name  string
+		input string
+		want  ast.SourceFile
+	}{
+		{
+			name:  "Naked Union",
+			input: `union Message { Increment, Decrement, }`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Union{
+						Name: "Message",
+						Fields: []*ast.UnionField{
+							{Name: "Increment", Type: nil},
+							{Name: "Decrement", Type: nil},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "Union with tuple types",
+			input: `union Message { Increment(int), Decrement(int), }`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Union{
+						Name: "Message",
+						Fields: []*ast.UnionField{
+							{Name: "Increment", Type: nil},
+							{Name: "Decrement", Type: nil},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewParser(lexer.New([]byte(tt.input)))
+			got := p.Parse()
+			for _, msg := range p.Diagnostics.Items {
+				fmt.Println(msg.Text)
+			}
+			if diff := cmp.Diff(tt.want, got, cmpOpts...); diff != "" {
+				t.Errorf("parser.Parse() mismatch (-want +got):\nInput:%s\n%s", tt.input, diff)
+			}
+		})
+	}
+
 }

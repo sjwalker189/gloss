@@ -62,6 +62,7 @@ func TestNextToken(t *testing.T) {
 				{Type: token.SWITCH, Literal: "switch"},
 				{Type: token.CASE, Literal: "case"},
 				{Type: token.DEFAULT, Literal: "default"},
+				// {Type: token.BREAK, Literal: "break"},
 				{Type: token.CONTINUE, Literal: "continue"},
 				{Type: token.FOR, Literal: "for"},
 				{Type: token.FUNC, Literal: "fn"},
@@ -219,7 +220,7 @@ func TestNextToken(t *testing.T) {
 				{Type: token.ELEMENT_ATTR, Literal: "disabled"},
 				{Type: token.ASSIGN, Literal: "="},
 				{Type: token.LBRACE, Literal: "{"},
-				{Type: token.IDENT, Literal: "true"},
+				{Type: token.BOOL, Literal: "true"},
 				{Type: token.RBRACE, Literal: "}"},
 				{Type: token.ELEMENT_OPEN_END, Literal: ">"},
 

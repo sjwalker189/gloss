@@ -519,15 +519,53 @@ func TestParseUnionStatement(t *testing.T) {
 			},
 		},
 		{
-			name:  "Union with tuple types",
-			input: `union Message { Increment(int), Decrement(int), }`,
+			name: "Union with type identifiers",
+			input: `
+				union Shape {
+					Square(Square),
+					Rectangle(Rectangle),
+					Circle(Circle),
+				}
+			`,
 			want: ast.SourceFile{
 				Declarations: []ast.Node{
 					&ast.Union{
-						Name: "Message",
+						Name: "Shape",
 						Fields: []*ast.UnionField{
-							{Name: "Increment", Type: &ast.TypeLiteral{Type: "int"}},
-							{Name: "Decrement", Type: &ast.TypeLiteral{Type: "int"}},
+							{Name: "Square", Type: &ast.TypeIdentifier{Name: "Square"}},
+							{Name: "Rectangle", Type: &ast.TypeIdentifier{Name: "Rectangle"}},
+							{Name: "Circle", Type: &ast.TypeIdentifier{Name: "Circle"}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Union with type paramters",
+			input: `
+				union Option(T) {
+					Some(T),
+					None,
+				}
+			`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Union{
+						Name: "Option",
+						Parameters: []*ast.TypeParameter{
+							{Name: "T"},
+						},
+						Fields: []*ast.UnionField{
+							{
+								Name: "Some",
+								Type: &ast.TypeIdentifier{
+									Name: "T",
+								},
+							},
+							{
+								Name: "None",
+								Type: nil,
+							},
 						},
 					},
 				},

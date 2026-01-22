@@ -346,8 +346,13 @@ func (p *Parser) parseUnion() *ast.Union {
 	}
 
 	union.Name = p.curToken.Literal
+	p.nextToken()
 
-	if !p.expectNext(token.LBRACE, "Expected '{'") {
+	if p.curToken.Type == token.LPAREN {
+		union.Parameters = p.parseTypeParameters()
+	}
+
+	if !p.expect(token.LBRACE, "Expected '{'") {
 		// TODO: Recover
 		p.nextToken()
 	}
@@ -388,16 +393,15 @@ func (p *Parser) parseUnionField() *ast.UnionField {
 	case token.COMMA:
 		return m
 	case token.LPAREN:
-		fmt.Println("eat paren", p.curToken.Literal)
 		p.nextToken() // eat (
 
 		m.Type = p.parseType()
 		// Should end on ')'
 		if p.curToken.Type != token.RPAREN {
-			p.Diagnostics.Error(p.curToken, "Expected ')'")
+			p.Diagnostics.Error(p.curToken,
+				"Expected ')'")
 		}
 
-		fmt.Println("eat paren", p.curToken.Literal)
 		p.nextToken() // eat )
 	default:
 		// TODO: Recover
@@ -417,6 +421,56 @@ func (p *Parser) parseType() ast.Type {
 		}
 		p.nextToken()
 		return t
+	case token.IDENT:
+		t := &ast.TypeIdentifier{
+			Name: p.curToken.Literal,
+		}
+
+		p.nextToken() // eat ident
+
+		if p.curToken.Type == token.LANGLE {
+			t.Parameters = p.parseTypeParameters()
+		}
+
+		return t
+	}
+
+	return nil
+}
+
+func (p *Parser) parseTypeParameters() []*ast.TypeParameter {
+	p.nextToken() // eat (
+
+	var params []*ast.TypeParameter
+
+	for p.curToken.Type != token.EOF && p.curToken.Type != token.RPAREN {
+		if !p.expect(token.IDENT, "Expected type parameter") {
+			// TODO: Recover
+			p.nextToken()
+			continue
+		}
+
+		// TODO: Default values and constraints
+		param := &ast.TypeParameter{Name: p.curToken.Literal}
+		params = append(params, param)
+		p.nextToken()
+
+		if p.curToken.Type == token.RPAREN {
+			break
+		}
+
+		if p.curToken.Type != token.COMMA {
+			p.Diagnostics.Error(p.curToken, "Expected ','")
+			// TODO: Recover
+		}
+
+		p.nextToken()
+	}
+
+	p.nextToken() // eat )
+
+	if len(params) > 0 {
+		return params
 	}
 
 	return nil

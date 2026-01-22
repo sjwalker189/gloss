@@ -83,10 +83,15 @@ type Parameter struct {
 	Default *Expression
 }
 
-type TypeIdentifer struct {
+type TypeIdentifier struct {
 	BaseNode
 	Name       string
-	Parameters []Type
+	Parameters []*TypeParameter
+}
+
+type TypeParameter struct {
+	BaseNode
+	Name string
 }
 
 type TypeLiteral struct {
@@ -109,8 +114,9 @@ type EnumMember struct {
 
 type Union struct {
 	BaseNode
-	Name   string
-	Fields []*UnionField
+	Name       string
+	Fields     []*UnionField
+	Parameters []*TypeParameter
 }
 
 type UnionField struct {
@@ -175,9 +181,9 @@ type TupleType struct {
 }
 
 // Denote nodes which can be used as types
-func (n TypeIdentifer) typeNode() {}
-func (n TypeLiteral) typeNode()   {}
-func (n StructBody) typeNode()    {}
+func (n TypeIdentifier) typeNode() {}
+func (n TypeLiteral) typeNode()    {}
+func (n StructBody) typeNode()     {}
 
 // Denote expression nodes
 func (e BinaryExpression) expressionNode() {}

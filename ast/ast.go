@@ -1,6 +1,8 @@
 package ast
 
-import "gloss/token"
+import (
+	"gloss/token"
+)
 
 type SourceFile struct {
 	BaseNode
@@ -24,17 +26,25 @@ type Node interface {
 	GetRange() Range
 }
 
-type Identifier struct {
-	BaseNode
-	Token token.Token
-	Name  string
+type Type interface {
+	typeNode()
 }
 
 type Expression interface {
 	expressionNode()
 }
 
-type InfixExpression struct {
+type Statement interface {
+	statementNode()
+}
+
+type Identifier struct {
+	BaseNode
+	Token token.Token
+	Name  string
+}
+
+type BinaryExpression struct {
 	Left     Expression
 	Right    Expression
 	Operator string
@@ -69,14 +79,19 @@ type BlockStatement struct {
 type Parameter struct {
 	BaseNode
 	Name    string
-	Type    string
+	Type    Type
 	Default *Expression
 }
 
-type Type struct {
+type TypeIdentifer struct {
 	BaseNode
 	Name       string
-	Parameters []*Type
+	Parameters []Type
+}
+
+type TypeLiteral struct {
+	BaseNode
+	Type string
 }
 
 type Enum struct {
@@ -101,7 +116,7 @@ type Union struct {
 type UnionField struct {
 	BaseNode
 	Name string
-	Type *Type
+	Type Type // literal type | union type | struct body | type ref with or without parameters
 }
 
 type Func struct {
@@ -109,7 +124,7 @@ type Func struct {
 	Name       string
 	Params     []*Parameter
 	Body       *BlockStatement
-	ReturnType *Type
+	ReturnType Type
 }
 
 type ReturnStatement struct {
@@ -135,11 +150,37 @@ type Boolean struct {
 
 type Tuple struct {
 	BaseNode
-	Items []*Type
+	Items []Type
 }
 
+type Struct struct {
+	Name string
+	Body *StructBody
+}
+
+type StructBody struct {
+	BaseNode
+	Fields []*StructField
+}
+
+type StructField struct {
+	BaseNode
+	Name string
+	Type Type
+}
+
+type TupleType struct {
+	BaseNode
+	Fields []Type
+}
+
+// Denote nodes which can be used as types
+func (n TypeIdentifer) typeNode() {}
+func (n TypeLiteral) typeNode()   {}
+func (n StructBody) typeNode()    {}
+
 // Denote expression nodes
-func (e InfixExpression) expressionNode()  {}
+func (e BinaryExpression) expressionNode() {}
 func (e PrefixExpression) expressionNode() {}
 func (e ParenExpression) expressionNode()  {}
 func (e CallExpression) expressionNode()   {}

@@ -32,7 +32,6 @@ func TestParseFunction(t *testing.T) {
 				},
 			},
 		},
-
 		{
 			name:  "Printer",
 			input: `fn print(msg string) {}`,
@@ -43,9 +42,10 @@ func TestParseFunction(t *testing.T) {
 						Params: []*ast.Parameter{
 							{
 								Name: "msg",
-								Type: "string",
+								Type: &ast.TypeLiteral{Type: "string"},
 							},
 						},
+						ReturnType: nil,
 					},
 				},
 			},
@@ -61,16 +61,14 @@ func TestParseFunction(t *testing.T) {
 						Params: []*ast.Parameter{
 							{
 								Name: "a",
-								Type: "int",
+								Type: &ast.TypeLiteral{Type: "int"},
 							},
 							{
 								Name: "b",
-								Type: "int",
+								Type: &ast.TypeLiteral{Type: "int"},
 							},
 						},
-						ReturnType: &ast.Type{
-							Name: "int",
-						},
+						ReturnType: &ast.TypeLiteral{Type: "int"},
 					},
 				},
 			},
@@ -144,7 +142,7 @@ func TestParseFunction(t *testing.T) {
 						Body: &ast.BlockStatement{
 							Statements: []ast.Node{
 								&ast.ReturnStatement{
-									Value: &ast.InfixExpression{
+									Value: &ast.BinaryExpression{
 										Left:     &ast.IntegerLiteral{Value: 2},
 										Right:    &ast.IntegerLiteral{Value: 3},
 										Operator: "+",
@@ -285,7 +283,7 @@ func TestParseLetStatement(t *testing.T) {
 						Name: &ast.Identifier{
 							Name: "five",
 						},
-						Value: &ast.InfixExpression{
+						Value: &ast.BinaryExpression{
 							Left:     &ast.IntegerLiteral{Value: 2},
 							Right:    &ast.IntegerLiteral{Value: 3},
 							Operator: "+",
@@ -296,7 +294,7 @@ func TestParseLetStatement(t *testing.T) {
 							Name: "ten",
 						},
 						Value: &ast.ParenExpression{
-							Expression: &ast.InfixExpression{
+							Expression: &ast.BinaryExpression{
 								Left:     &ast.IntegerLiteral{Value: 5},
 								Right:    &ast.IntegerLiteral{Value: 5},
 								Operator: "+",
@@ -307,9 +305,9 @@ func TestParseLetStatement(t *testing.T) {
 						Name: &ast.Identifier{
 							Name: "zero",
 						},
-						Value: &ast.InfixExpression{
+						Value: &ast.BinaryExpression{
 							Left: &ast.ParenExpression{
-								Expression: &ast.InfixExpression{
+								Expression: &ast.BinaryExpression{
 									Left:     &ast.IntegerLiteral{Value: 10},
 									Right:    &ast.IntegerLiteral{Value: 5},
 									Operator: "-",
@@ -462,6 +460,65 @@ func TestParseUnionStatement(t *testing.T) {
 			},
 		},
 		{
+			name: "Union with literal types",
+			input: `
+				union Message {
+					Increment(int),
+					Decrement(int),
+					Reset(string),
+					Done(bool),
+				}
+			`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Union{
+						Name: "Message",
+						Fields: []*ast.UnionField{
+							{Name: "Increment", Type: &ast.TypeLiteral{Type: "int"}},
+							{Name: "Decrement", Type: &ast.TypeLiteral{Type: "int"}},
+							{Name: "Reset", Type: &ast.TypeLiteral{Type: "string"}},
+							{Name: "Done", Type: &ast.TypeLiteral{Type: "bool"}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Union with struct types",
+			input: `
+				union Shape {
+					Square({ size: int }),
+					Rectangle({ width: int, height: int, }),
+					Circle({ radius: int, }),
+				}
+			`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Union{
+						Name: "Shape",
+						Fields: []*ast.UnionField{
+							{Name: "Square", Type: &ast.StructBody{
+								Fields: []*ast.StructField{
+									{Name: "size", Type: &ast.TypeLiteral{Type: "int"}},
+								},
+							}},
+							{Name: "Rectangle", Type: &ast.StructBody{
+								Fields: []*ast.StructField{
+									{Name: "width", Type: &ast.TypeLiteral{Type: "int"}},
+									{Name: "height", Type: &ast.TypeLiteral{Type: "int"}},
+								},
+							}},
+							{Name: "Circle", Type: &ast.StructBody{
+								Fields: []*ast.StructField{
+									{Name: "radius", Type: &ast.TypeLiteral{Type: "int"}},
+								},
+							}},
+						},
+					},
+				},
+			},
+		},
+		{
 			name:  "Union with tuple types",
 			input: `union Message { Increment(int), Decrement(int), }`,
 			want: ast.SourceFile{
@@ -469,8 +526,8 @@ func TestParseUnionStatement(t *testing.T) {
 					&ast.Union{
 						Name: "Message",
 						Fields: []*ast.UnionField{
-							{Name: "Increment", Type: nil},
-							{Name: "Decrement", Type: nil},
+							{Name: "Increment", Type: &ast.TypeLiteral{Type: "int"}},
+							{Name: "Decrement", Type: &ast.TypeLiteral{Type: "int"}},
 						},
 					},
 				},

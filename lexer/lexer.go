@@ -5,6 +5,31 @@ import (
 	"unicode"
 )
 
+var keywords = map[string]token.TokenType{
+	"if":       token.IF,
+	"else":     token.ELSE,
+	"for":      token.FOR,
+	"break":    token.BREAK,
+	"continue": token.CONTINUE,
+	"switch":   token.SWITCH,
+	"case":     token.CASE,
+	"default":  token.DEFAULT,
+	"return":   token.RETURN,
+	"let":      token.LET,
+	"fn":       token.FUNC,
+	"enum":     token.ENUM,
+	"union":    token.UNION,
+	"struct":   token.STRUCT,
+	"true":     token.BOOL,
+	"false":    token.BOOL,
+}
+
+var builtins = map[string]token.TokenType{
+	"bool":   token.TYPE_BOOL,
+	"string": token.TYPE_BOOL,
+	"int":    token.TYPE_INT,
+}
+
 type Lexer struct {
 	input []byte
 
@@ -378,47 +403,20 @@ func (l *Lexer) NextToken() token.Token {
 			continue
 		}
 
-		// Identifiers and Keywords
+		// Identifiers, Keywords, and Builtins
 		if unicode.IsLetter(l.char) {
 			identToken := l.readIdentifer()
 
-			switch identToken.Literal {
-			case "use":
-				identToken.Type = token.IMPORT
-			case "enum":
-				identToken.Type = token.ENUM
-			case "struct":
-				identToken.Type = token.STRUCT
-			case "interface":
-				identToken.Type = token.IFACE
-			case "extern":
-				identToken.Type = token.EXTERN
-			case "end":
-				identToken.Type = token.END
-			case "if":
-				identToken.Type = token.IF
-			case "else":
-				identToken.Type = token.ELSE
-			case "switch":
-				identToken.Type = token.SWITCH
-			case "case":
-				identToken.Type = token.CASE
-			case "default":
-				identToken.Type = token.DEFAULT
-			case "for":
-				identToken.Type = token.FOR
-			case "continue":
-				identToken.Type = token.CONTINUE
-			case "break":
-				identToken.Type = token.BREAK
-			case "return":
-				identToken.Type = token.RETURN
-			case "let":
-				identToken.Type = token.LET
-			case "fn":
-				identToken.Type = token.FUNC
-			case "true", "false":
-				identToken.Type = token.BOOL
+			// Text is a keyword?
+			if tokenType, ok := keywords[identToken.Literal]; ok {
+				identToken.Type = tokenType
+				return identToken
+			}
+
+			// Text is a builtin?
+			if tokenType, ok := builtins[identToken.Literal]; ok {
+				identToken.Type = tokenType
+				return identToken
 			}
 
 			return identToken
@@ -457,7 +455,11 @@ func (l *Lexer) NextToken() token.Token {
 
 		// Symbols
 		var tt token.TokenType
+		tl := string(l.char)
+
 		switch l.char {
+		case ':':
+			tt = token.COLON
 		case '\'':
 			tt = token.TICK
 		case '`':
@@ -468,8 +470,6 @@ func (l *Lexer) NextToken() token.Token {
 			tt = token.COMMA
 		case '+':
 			tt = token.PLUS
-		case '=':
-			tt = token.ASSIGN
 		case '-':
 			tt = token.MINUS
 		case '*':
@@ -494,15 +494,80 @@ func (l *Lexer) NextToken() token.Token {
 			if l.braceDepth > 0 {
 				l.braceDepth--
 			}
+
+		// Possible operators
+		case '^':
+			tt = token.BITWISE_XOR
+
+		case '~':
+			tt = token.BITWISE_NOT
+
+		case '|':
+			if next, ok := l.peek(); ok && next == '|' {
+				tt = token.OR
+				tl = "||"
+				l.advance()
+			} else {
+				tt = token.BITWISE_OR
+			}
+
+		case '&':
+			if next, ok := l.peek(); ok && next == '&' {
+				tt = token.AND
+				tl = "&&"
+				l.advance()
+			} else {
+				tt = token.BITWISE_AND
+			}
+
+		case '=':
+			if next, ok := l.peek(); ok && next == '=' {
+				tt = token.EQ
+				tl = "=="
+				l.advance()
+			} else {
+				tt = token.ASSIGN
+			}
+
 		case '<':
-			tt = token.LANGLE
+			if next, ok := l.peek(); ok && next == '=' {
+				tt = token.LT_EQ
+				tl = "<="
+				l.advance()
+			} else if next, ok := l.peek(); ok && next == '<' {
+				tt = token.BITSHIFTL
+				tl = "<<"
+				l.advance()
+			} else {
+				tt = token.LANGLE
+			}
+
 		case '>':
-			tt = token.RANGLE
+			if next, ok := l.peek(); ok && next == '=' {
+				tt = token.GT_EQ
+				tl = ">="
+				l.advance()
+			} else if next, ok := l.peek(); ok && next == '>' {
+				tt = token.BITSHIFTR
+				tl = ">>"
+				l.advance()
+			} else {
+				tt = token.RANGLE
+			}
+
+		case '!':
+			if next, ok := l.peek(); ok && next == '=' {
+				tt = token.NOT_EQ
+				tl = "!="
+				l.advance()
+			} else {
+				tt = token.BANG
+			}
 		default:
 			tt = token.ILLEGAL
 		}
 
-		t := token.Token{Type: tt, Literal: string(l.char), Line: l.line, Column: startCol}
+		t := token.Token{Type: tt, Literal: tl, Line: l.line, Column: startCol}
 		l.advance()
 		return t
 	}

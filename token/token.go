@@ -28,11 +28,21 @@ const (
 	MUL    = "MUL"
 	DIV    = "DIV"
 	MOD    = "MOD"
-	AND    = "AND"
 	EQ     = "EQ"
 	NOT_EQ = "NOT_EQ"
 	LT     = "LESS_THAN"
+	LT_EQ  = "LESS_THAN_OR_EQUAL"
 	GT     = "GREATER_THAN"
+	GT_EQ  = "GREATER_THAN_OR_EQUAL"
+	AND    = "AND"
+	OR     = "OR"
+
+	BITWISE_OR  = "B_OR"
+	BITWISE_XOR = "B_XOR"
+	BITWISE_NOT = "B_NOT"
+	BITWISE_AND = "B_AND"
+	BITSHIFTL   = "B_SHIFT_L"
+	BITSHIFTR   = "B_SHIFT_R"
 
 	// Delimiters
 	PERIOD    = "PERIOD"
@@ -57,10 +67,9 @@ const (
 	LET                 = "LET"
 	FUNC                = "FUNC"
 	IMPORT              = "IMPORT"
-	END                 = "END"
 	ENUM                = "ENUM"
+	UNION               = "UNION"
 	STRUCT              = "STRUCT"
-	IFACE               = "IFACE"
 	EXTERN              = "EXTERN"
 	IF                  = "IF"
 	ELSE                = "ELSE"
@@ -79,6 +88,10 @@ const (
 	ELEMENT_IDENT       = "EL_IDENT"
 	ELEMENT_ATTR        = "EL_ATTR"
 	ELEMENT_TEXT        = "EL_TEXT"
+
+	TYPE_STRING = "T_STRING"
+	TYPE_INT    = "T_INT"
+	TYPE_BOOL   = "T_BOOl"
 )
 
 const (

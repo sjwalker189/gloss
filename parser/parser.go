@@ -41,16 +41,16 @@ func NewParser(l *lexer.Lexer) *Parser {
 	}
 
 	p.infixParseFunc = map[token.TokenType]infixParseFunc{
-		token.PLUS:   p.parseInfixExpression,
-		token.MINUS:  p.parseInfixExpression,
-		token.MUL:    p.parseInfixExpression,
-		token.DIV:    p.parseInfixExpression,
-		token.MOD:    p.parseInfixExpression,
-		token.EQ:     p.parseInfixExpression,
-		token.NOT_EQ: p.parseInfixExpression,
-		token.LT:     p.parseInfixExpression,
-		token.GT:     p.parseInfixExpression,
-		token.AND:    p.parseInfixExpression,
+		token.PLUS:   p.parseBinaryExpression,
+		token.MINUS:  p.parseBinaryExpression,
+		token.MUL:    p.parseBinaryExpression,
+		token.DIV:    p.parseBinaryExpression,
+		token.MOD:    p.parseBinaryExpression,
+		token.EQ:     p.parseBinaryExpression,
+		token.NOT_EQ: p.parseBinaryExpression,
+		token.LT:     p.parseBinaryExpression,
+		token.GT:     p.parseBinaryExpression,
+		token.AND:    p.parseBinaryExpression,
 		token.LPAREN: p.parseCallExpression,
 	}
 
@@ -60,12 +60,21 @@ func NewParser(l *lexer.Lexer) *Parser {
 }
 
 // Helpers
+
+func (p *Parser) expect(t token.TokenType, msg string) bool {
+	if p.curToken.Type == t {
+		return true
+	}
+	p.Diagnostics.Error(p.curToken, msg)
+	return false
+}
+
 func (p *Parser) expectNext(t token.TokenType, msg string) bool {
 	if p.peekToken.Type == t {
 		p.nextToken()
 		return true
 	}
-	p.Diagnostics.Error(p.curToken, msg)
+	p.Diagnostics.Error(p.peekToken, msg)
 	return false
 }
 
@@ -92,6 +101,8 @@ func (p *Parser) parseDeclarations() ast.Node {
 	switch p.curToken.Type {
 	case token.ENUM:
 		return p.parseEnum()
+	case token.UNION:
+		return p.parseUnion()
 	case token.LET:
 		return p.parseLetStatement()
 	case token.FUNC:
@@ -143,19 +154,17 @@ func (p *Parser) parseFunc() *ast.Func {
 
 	fn.Params = p.parseFuncParams()
 
-	if p.peekToken.Type != token.LBRACE {
-		// TODD: Should implement a parseType receiver for generics like Result<T>
-		if p.expectNext(token.IDENT, "Expected return type") {
-			fn.ReturnType = &ast.Type{
-				Name: p.curToken.Literal,
-			}
-		} else {
-			// TODO: Recover
+	// Return types are optional, but if present it must be a type node
+	if p.curToken.Type != token.LBRACE {
+		fn.ReturnType = p.parseType()
+		if fn.ReturnType == nil {
+			p.Diagnostics.Error(p.curToken, "Expected type")
+			// TODO: recover
 			p.nextToken()
 		}
 	}
 
-	if p.expectNext(token.LBRACE, "Expected '{'") {
+	if p.expect(token.LBRACE, "Expected '{'") {
 		fn.Body = p.parseBlockStatement()
 	} else {
 		// TODO: Recover
@@ -165,48 +174,58 @@ func (p *Parser) parseFunc() *ast.Func {
 }
 
 func (p *Parser) parseFuncParams() []*ast.Parameter {
+	if p.curToken.Type != token.LPAREN {
+		panic(fmt.Sprintf("cannot parse func params. invalid token type: %s", p.curToken.Type))
+	}
+
 	// Handle functions with no arguments
 	if p.peekToken.Type == token.RPAREN {
+		p.nextToken() // eat (
+		p.nextToken() // eat )
 		return nil
 	}
 
 	var params []*ast.Parameter
-	for {
-
-		if !p.expectNext(token.IDENT, "Expected parameter name") {
+	for p.curToken.Type != token.EOF && p.curToken.Type != token.RPAREN {
+		if p.curToken.Type != token.IDENT {
+			p.Diagnostics.Error(p.curToken, "Expected parameter name")
 			// TODO: recover
+			p.nextToken()
 			continue
 		}
 
 		param := &ast.Parameter{
 			Name: p.curToken.Literal,
 		}
+		p.nextToken()
 
-		if !p.expectNext(token.IDENT, "Expected parameter type") {
+		param.Type = p.parseType()
+		if param.Type == nil {
+			p.Diagnostics.Error(p.curToken, "Expected parameter type")
 			// TODO: recover
-			continue
+			p.nextToken()
 		}
 
-		// TODO: Assign default values
-		param.Type = p.curToken.Literal
 		params = append(params, param)
 
-		if p.peekToken.Type != token.COMMA && p.peekToken.Type != token.RPAREN {
+		if p.curToken.Type != token.COMMA && p.curToken.Type != token.RPAREN {
 			p.Diagnostics.Error(p.peekToken, "Expected ',' or ')'")
 			// TODO: recover
+			p.nextToken()
 		}
 
 		// Consume comma and keep processing parameters
-		if p.peekToken.Type == token.COMMA {
+		if p.curToken.Type == token.COMMA {
 			p.nextToken()
 		}
 
 		// We reached the end of the parameter list
-		if p.peekToken.Type == token.RPAREN {
-			p.nextToken()
+		if p.curToken.Type == token.RPAREN {
 			break
 		}
 	}
+
+	p.nextToken() // eat )
 
 	return params
 }
@@ -229,7 +248,13 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 }
 
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
+	if p.curToken.Type != token.LBRACE {
+		panic("cannot parse block statement. invalid token")
+	}
+
 	block := &ast.BlockStatement{}
+
+	p.nextToken() // eat {
 
 	for p.curToken.Type != token.EOF && p.curToken.Type != token.RBRACE {
 		stmt := p.parseStatement()
@@ -331,6 +356,17 @@ func (p *Parser) parseUnion() *ast.Union {
 		if m := p.parseUnionField(); m != nil {
 			union.Fields = append(union.Fields, m)
 		}
+
+		if p.curToken.Type == token.RBRACE {
+			p.nextToken()
+			break
+		}
+
+		if p.curToken.Type != token.COMMA {
+			p.Diagnostics.Error(p.curToken, "Expected ','")
+			// TODO: Recover
+		}
+
 		p.nextToken()
 	}
 
@@ -348,21 +384,22 @@ func (p *Parser) parseUnionField() *ast.UnionField {
 
 	p.nextToken()
 
-	switch p.peekToken.Type {
+	switch p.curToken.Type {
 	case token.COMMA:
 		return m
-	case token.LBRACE:
-		// m.Type = p.parseStructBody()
 	case token.LPAREN:
-		// m.Type = p.parseTuple()
-	case token.IDENT, token.BOOL:
-		// m.Type = p.parseType()
-	default:
-		// TODO: Recover
-		p.nextToken()
-	}
+		fmt.Println("eat paren", p.curToken.Literal)
+		p.nextToken() // eat (
 
-	if !p.expectNext(token.COMMA, "Missing comma") {
+		m.Type = p.parseType()
+		// Should end on ')'
+		if p.curToken.Type != token.RPAREN {
+			p.Diagnostics.Error(p.curToken, "Expected ')'")
+		}
+
+		fmt.Println("eat paren", p.curToken.Literal)
+		p.nextToken() // eat )
+	default:
 		// TODO: Recover
 		p.nextToken()
 	}
@@ -370,53 +407,117 @@ func (p *Parser) parseUnionField() *ast.UnionField {
 	return m
 }
 
-func (p *Parser) parseTupleType() *ast.TupleLiteral {
-	tuple := &ast.Tuple{}
-	p.nextToken()
+func (p *Parser) parseType() ast.Type {
+	switch p.curToken.Type {
+	case token.LBRACE:
+		return p.parseStructBody()
+	case token.TYPE_INT, token.TYPE_BOOL, token.TYPE_STRING:
+		t := &ast.TypeLiteral{
+			Type: p.curToken.Literal,
+		}
+		p.nextToken()
+		return t
+	}
 
-	for p.curToken.Type != token.EOF && p.curToken.Type != token.RPAREN {
-		if t := p.parseType(); t != nil {
-			tuple.Fields = append(tuple.Fields, t)
+	return nil
+}
+
+func (p *Parser) parseTypeLiteral() ast.Type {
+	switch p.curToken.Type {
+	case token.TYPE_INT, token.TYPE_BOOL, token.TYPE_STRING:
+		return &ast.TypeLiteral{
+			Type: p.curToken.Literal,
+		}
+	}
+	return nil
+}
+
+func (p *Parser) parseStructBody() *ast.StructBody {
+	if p.curToken.Type != token.LBRACE {
+		panic("cannot parse struct body. invalid token")
+	}
+
+	body := &ast.StructBody{}
+
+	p.nextToken() // eat {
+
+	for p.curToken.Type != token.EOF && p.curToken.Type != token.RBRACE {
+		if field := p.parseStructField(); field != nil {
+			body.Fields = append(body.Fields, field)
 		}
 
-		p.nextToken()
-		if p.curToken.Type == token.RPAREN {
+		if p.curToken.Type == token.RBRACE {
 			break
 		}
 
 		if p.curToken.Type == token.COMMA {
 			p.nextToken()
-			if p.curToken.Type == token.RPAREN {
-				// TODO: Support trailing commas in tuples?
-			}
+			continue
 		}
+
+		p.Diagnostics.Error(p.curToken, "Expected ',' or '}'")
 	}
 
-	p.nextToken() // eat )
+	p.nextToken() // eat }
 
-	return tuple
+	return body
 }
 
-func (p *Parser) parseType() *ast.Type {
-	// TODO: token.TYPE_BOOL meaning "bool" instead of BOOL which is literal "true" and "false"
-	// TODO: need to lex more explict tokens for types
-	// TODO: need to handle pointer types? or always wrap in Maybe<T>?
+func (p *Parser) parseStructField() *ast.StructField {
 	if p.curToken.Type != token.IDENT {
 		return nil
 	}
 
-	t := &ast.Type{
+	field := &ast.StructField{
 		Name: p.curToken.Literal,
 	}
 
-	switch p.curToken.Literal {
-	case "bool", "int", "string":
-		return t
+	fmt.Println(p.curToken.Literal)
+	p.nextToken() // eat ident
+
+	fmt.Println(p.curToken.Literal)
+	if p.curToken.Type != token.COLON {
+		panic(fmt.Sprintf("%s not a colon\n", p.curToken.Literal))
 	}
 
-	// check for type paramters, for example: Either<A,B>
-	p.nextToken()
-	return t
+	p.nextToken() // eat :
+	fmt.Println(p.curToken.Literal)
+
+	field.Type = p.parseType()
+	if field.Type == nil {
+		p.Diagnostics.Error(p.curToken, "Expected type")
+		return nil
+	}
+
+	return field
+}
+
+func (p *Parser) parseTupleType() *ast.TupleType {
+	return nil
+	// tuple := &ast.Tuple{}
+	// p.nextToken()
+	//
+	// for p.curToken.Type != token.EOF && p.curToken.Type != token.RPAREN {
+	// 	if t := p.parseType(); t != nil {
+	// 		tuple.Fields = append(tuple.Fields, t)
+	// 	}
+	//
+	// 	p.nextToken()
+	// 	if p.curToken.Type == token.RPAREN {
+	// 		break
+	// 	}
+	//
+	// 	if p.curToken.Type == token.COMMA {
+	// 		p.nextToken()
+	// 		if p.curToken.Type == token.RPAREN {
+	// 			// TODO: Support trailing commas in tuples?
+	// 		}
+	// 	}
+	// }
+	//
+	// p.nextToken() // eat )
+	//
+	// return tuple
 }
 
 func (p *Parser) parseIdent() ast.Expression {
@@ -501,8 +602,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	return leftExp
 }
 
-func (p *Parser) parseInfixExpression(left ast.Expression) ast.Expression {
-	expression := &ast.InfixExpression{
+func (p *Parser) parseBinaryExpression(left ast.Expression) ast.Expression {
+	expression := &ast.BinaryExpression{
 		Operator: p.curToken.Literal,
 		Left:     left,
 	}

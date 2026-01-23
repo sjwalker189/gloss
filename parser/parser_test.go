@@ -28,6 +28,7 @@ func TestParseFunction(t *testing.T) {
 				Declarations: []ast.Node{
 					&ast.Func{
 						Name: "print",
+						Body: &ast.BlockStatement{},
 					},
 				},
 			},
@@ -45,6 +46,7 @@ func TestParseFunction(t *testing.T) {
 								Type: &ast.TypeLiteral{Type: "string"},
 							},
 						},
+						Body:       &ast.BlockStatement{},
 						ReturnType: nil,
 					},
 				},
@@ -58,6 +60,7 @@ func TestParseFunction(t *testing.T) {
 				Declarations: []ast.Node{
 					&ast.Func{
 						Name: "add",
+						Body: &ast.BlockStatement{},
 						Params: []*ast.Parameter{
 							{
 								Name: "a",
@@ -199,15 +202,15 @@ func TestParseFunction(t *testing.T) {
 				Declarations: []ast.Node{
 					&ast.Func{
 						Name: "join",
-						TypeParams: []*ast.TypeParameter{
-							{Name: "T"},
-						},
 						Params: []*ast.Parameter{
 							{Name: "a", Type: &ast.TypeIdentifier{Name: "T"}},
 							{Name: "b", Type: &ast.TypeIdentifier{Name: "T"}},
 						},
+						TypeParams: []*ast.TypeParameter{
+							{Name: "T"},
+						},
 						ReturnType: &ast.TypeIdentifier{Name: "T"},
-						Body:       nil,
+						Body:       &ast.BlockStatement{},
 					},
 				},
 			},
@@ -586,6 +589,76 @@ func TestParseUnionStatement(t *testing.T) {
 								Name: "None",
 								Type: nil,
 							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := NewParser(lexer.New([]byte(tt.input)))
+			got := p.Parse()
+			for _, msg := range p.Diagnostics.Items {
+				fmt.Println(msg.Text)
+			}
+			if diff := cmp.Diff(tt.want, got, cmpOpts...); diff != "" {
+				t.Errorf("parser.Parse() mismatch (-want +got):\nInput:%s\n%s", tt.input, diff)
+			}
+		})
+	}
+
+}
+
+func TestParseStruct(t *testing.T) {
+	cmpOpts := []cmp.Option{
+		// cmpopts.IgnoreFields(token.Token{}, "Line", "Column"),
+	}
+
+	tests := []struct {
+		name  string
+		input string
+		want  ast.SourceFile
+	}{
+		{
+			name: "User struct",
+			input: `
+				struct User {
+					name: string,
+					age: int,
+				}
+			`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Struct{
+						Name: "User",
+						Fields: []*ast.StructField{
+							{Name: "name", Type: &ast.TypeLiteral{Type: "string"}},
+							{Name: "age", Type: &ast.TypeLiteral{Type: "int"}},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Generic struct",
+			input: `
+				struct Point<T> {
+					x: T,
+					y: T,
+				}
+			`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Struct{
+						Name: "Point",
+						Params: []*ast.TypeParameter{
+							{Name: "T"},
+						},
+						Fields: []*ast.StructField{
+							{Name: "x", Type: &ast.TypeIdentifier{Name: "T"}},
+							{Name: "y", Type: &ast.TypeIdentifier{Name: "T"}},
 						},
 					},
 				},

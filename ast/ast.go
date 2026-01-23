@@ -129,6 +129,7 @@ type Func struct {
 	BaseNode
 	Name       string
 	Params     []*Parameter
+	TypeParams []*TypeParameter
 	Body       *BlockStatement
 	ReturnType Type
 }

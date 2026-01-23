@@ -148,7 +148,13 @@ func (p *Parser) parseFunc() *ast.Func {
 
 	fn.Name = p.curToken.Literal
 
-	if !p.expectNext(token.LPAREN, "Expected function parameters") {
+	if p.peekToken.Type == token.LANGLE {
+		fn.TypeParams = p.parseTypeParameters()
+	} else {
+		p.nextToken()
+	}
+
+	if !p.expect(token.LPAREN, "Expected function parameters") {
 		return nil
 	}
 
@@ -348,7 +354,7 @@ func (p *Parser) parseUnion() *ast.Union {
 	union.Name = p.curToken.Literal
 	p.nextToken()
 
-	if p.curToken.Type == token.LPAREN {
+	if p.curToken.Type == token.LANGLE {
 		union.Parameters = p.parseTypeParameters()
 	}
 
@@ -439,11 +445,11 @@ func (p *Parser) parseType() ast.Type {
 }
 
 func (p *Parser) parseTypeParameters() []*ast.TypeParameter {
-	p.nextToken() // eat (
+	p.nextToken() // eat <
 
 	var params []*ast.TypeParameter
 
-	for p.curToken.Type != token.EOF && p.curToken.Type != token.RPAREN {
+	for p.curToken.Type != token.EOF && p.curToken.Type != token.RANGLE {
 		if !p.expect(token.IDENT, "Expected type parameter") {
 			// TODO: Recover
 			p.nextToken()
@@ -455,7 +461,7 @@ func (p *Parser) parseTypeParameters() []*ast.TypeParameter {
 		params = append(params, param)
 		p.nextToken()
 
-		if p.curToken.Type == token.RPAREN {
+		if p.curToken.Type == token.RANGLE {
 			break
 		}
 
@@ -467,7 +473,7 @@ func (p *Parser) parseTypeParameters() []*ast.TypeParameter {
 		p.nextToken()
 	}
 
-	p.nextToken() // eat )
+	p.nextToken() // eat >
 
 	if len(params) > 0 {
 		return params
@@ -526,16 +532,13 @@ func (p *Parser) parseStructField() *ast.StructField {
 		Name: p.curToken.Literal,
 	}
 
-	fmt.Println(p.curToken.Literal)
 	p.nextToken() // eat ident
 
-	fmt.Println(p.curToken.Literal)
-	if p.curToken.Type != token.COLON {
-		panic(fmt.Sprintf("%s not a colon\n", p.curToken.Literal))
+	if !p.expect(token.COLON, "Expected ':'") {
+		return nil
 	}
 
 	p.nextToken() // eat :
-	fmt.Println(p.curToken.Literal)
 
 	field.Type = p.parseType()
 	if field.Type == nil {

@@ -3,16 +3,15 @@
 ### Lexing
 - Signed numbers
 - Floats
-- Big number representation
-- Generics vs Elements (both using <T>, should not be open tag in context of code)
+- Alternative number representation
+- Template strings
+- Chars
 
 
 ### Parsing
 - Control flows (if/else, switch, etc)
 - Loops
-- Structs
 - Elements
-- Generics
 - Visibility
 - Modules
 
@@ -25,5 +24,7 @@
 
 
 ## Considerations
-Support pattern matching vs exhaustive switches?
-Investigate compiling to llvm ir
+Support pattern matching vs exhaustive switches?    
+    -> Optional return statements?
+
+Investigate compiling to llvm ir and working towards a "real" language

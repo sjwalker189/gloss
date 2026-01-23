@@ -30,11 +30,19 @@ type Diagnostic struct {
 }
 
 type DiagnosticList struct {
-	Items []Diagnostic
+	list []Diagnostic
+}
+
+func (dl *DiagnosticList) Any() bool {
+	return len(dl.list) > 0
+}
+
+func (dl *DiagnosticList) Messages() []Diagnostic {
+	return dl.list
 }
 
 func (dl *DiagnosticList) Error(t token.Token, msg string) {
-	dl.Items = append(dl.Items, Diagnostic{
+	dl.list = append(dl.list, Diagnostic{
 		Line:     t.Line,
 		Column:   t.Column,
 		Text:     msg,
@@ -43,7 +51,7 @@ func (dl *DiagnosticList) Error(t token.Token, msg string) {
 }
 
 func (dl *DiagnosticList) Warn(t token.Token, msg string) {
-	dl.Items = append(dl.Items, Diagnostic{
+	dl.list = append(dl.list, Diagnostic{
 		Line:     t.Line,
 		Column:   t.Column,
 		Text:     msg,
@@ -52,7 +60,7 @@ func (dl *DiagnosticList) Warn(t token.Token, msg string) {
 }
 
 func (dl *DiagnosticList) Raise(t token.Token, msg string) {
-	dl.Items = append(dl.Items, Diagnostic{
+	dl.list = append(dl.list, Diagnostic{
 		Line:     t.Line,
 		Column:   t.Column,
 		Text:     msg,

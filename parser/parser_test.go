@@ -4,590 +4,188 @@ import (
 	"fmt"
 	"gloss/ast"
 	"gloss/lexer"
-
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	// "github.com/google/go-cmp/cmp/cmpopts"
 )
 
-func TestParseFunction(t *testing.T) {
-	cmpOpts := []cmp.Option{
-		// cmpopts.IgnoreFields(token.Token{}, "Line", "Column"),
+func assertParse(t *testing.T, input string, want ast.SourceFile) {
+	t.Helper()
+	p := NewParser(lexer.New([]byte(input)))
+	got := p.Parse()
+
+	for _, msg := range p.Diagnostics.list {
+		fmt.Println(msg.Text)
 	}
 
-	tests := []struct {
-		name  string
-		input string
-		want  ast.SourceFile
-	}{
-		{
-			name:  "Hello world",
-			input: `fn print() {}`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Func{
-						Name: "print",
-						Body: &ast.BlockStatement{},
-					},
-				},
-			},
-		},
-		{
-			name:  "Printer",
-			input: `fn print(msg string) {}`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Func{
-						Name: "print",
-						Params: []*ast.Parameter{
-							{
-								Name: "msg",
-								Type: &ast.TypeLiteral{Type: "string"},
-							},
-						},
-						Body:       &ast.BlockStatement{},
-						ReturnType: nil,
-					},
-				},
-			},
-		},
-
-		{
-			name:  "adder",
-			input: `fn add(a int, b int) int {}`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Func{
-						Name: "add",
-						Body: &ast.BlockStatement{},
-						Params: []*ast.Parameter{
-							{
-								Name: "a",
-								Type: &ast.TypeLiteral{Type: "int"},
-							},
-							{
-								Name: "b",
-								Type: &ast.TypeLiteral{Type: "int"},
-							},
-						},
-						ReturnType: &ast.TypeLiteral{Type: "int"},
-					},
-				},
-			},
-		},
-		{
-			name:  "returns void",
-			input: `fn withreturn() { return }`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Func{
-						Name: "withreturn",
-						Body: &ast.BlockStatement{
-							Statements: []ast.Node{
-								&ast.ReturnStatement{
-									Value: nil,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-
-		{
-			name:  "returns string",
-			input: `fn withreturn() { return "a" }`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Func{
-						Name: "withreturn",
-						Body: &ast.BlockStatement{
-							Statements: []ast.Node{
-								&ast.ReturnStatement{
-									Value: &ast.StringLiteral{
-										Value: "a",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name:  "returns int",
-			input: `fn withreturn() { return 0 }`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Func{
-						Name: "withreturn",
-						Body: &ast.BlockStatement{
-							Statements: []ast.Node{
-								&ast.ReturnStatement{
-									Value: &ast.IntegerLiteral{
-										Value: 0,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name:  "returns expression",
-			input: `fn withreturn() { return 2 + 3 }`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Func{
-						Name: "withreturn",
-						Body: &ast.BlockStatement{
-							Statements: []ast.Node{
-								&ast.ReturnStatement{
-									Value: &ast.BinaryExpression{
-										Left:     &ast.IntegerLiteral{Value: 2},
-										Right:    &ast.IntegerLiteral{Value: 3},
-										Operator: "+",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name:  "returns boolean",
-			input: `fn withreturn() { return true }`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Func{
-						Name: "withreturn",
-						Body: &ast.BlockStatement{
-							Statements: []ast.Node{
-								&ast.ReturnStatement{
-									Value: &ast.Boolean{Value: true},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name:  "returns paren expression",
-			input: `fn withreturn() { return (2) }`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Func{
-						Name: "withreturn",
-						Body: &ast.BlockStatement{
-							Statements: []ast.Node{
-								&ast.ReturnStatement{
-									Value: &ast.ParenExpression{
-										Expression: &ast.IntegerLiteral{Value: 2},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name:  "generic func",
-			input: `fn join<T>(a T, b T) T { }`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Func{
-						Name: "join",
-						Params: []*ast.Parameter{
-							{Name: "a", Type: &ast.TypeIdentifier{Name: "T"}},
-							{Name: "b", Type: &ast.TypeIdentifier{Name: "T"}},
-						},
-						TypeParams: []*ast.TypeParameter{
-							{Name: "T"},
-						},
-						ReturnType: &ast.TypeIdentifier{Name: "T"},
-						Body:       &ast.BlockStatement{},
-					},
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := NewParser(lexer.New([]byte(tt.input)))
-			got := p.Parse()
-
-			for _, msg := range p.Diagnostics.Items {
-				fmt.Println(msg.Text)
-			}
-
-			if diff := cmp.Diff(tt.want, got, cmpOpts...); diff != "" {
-				t.Errorf("parser.Parse() mismatch (-want +got):\nInput:%s\n%s", tt.input, diff)
-			}
-		})
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("parser.Parse() mismatch (-want +got):\nInput:%s\n%s", input, diff)
 	}
 }
 
-func TestParseLetStatement(t *testing.T) {
-	cmpOpts := []cmp.Option{
-		// cmpopts.IgnoreFields(token.Token{}, "Line", "Column"),
+// --- Function Tests ---
+
+func TestParseFunc_HelloWorld(t *testing.T) {
+	input := `fn print() {}`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.Func{Name: "print", Body: &ast.BlockStatement{}},
+		},
 	}
+	assertParse(t, input, want)
+}
 
-	tests := []struct {
-		name  string
-		input string
-		want  ast.SourceFile
-	}{
-		{
-			name:  "Hello world",
-			input: `let msg = "hello world"`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.LetStatement{
-						Name: &ast.Identifier{
-							Name: "msg",
-						},
-						Value: &ast.StringLiteral{
-							Value: "hello world",
-						},
-					},
+func TestParseFunc_WithParams(t *testing.T) {
+	input := `fn print(msg string) {}`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.Func{
+				Name: "print",
+				Params: []*ast.Parameter{
+					{Name: "msg", Type: &ast.TypeLiteral{Type: "string"}},
 				},
+				Body: &ast.BlockStatement{},
 			},
 		},
-		{
-			name:  "Assign number",
-			input: `let duration = 1_000`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.LetStatement{
-						Name: &ast.Identifier{
-							Name: "duration",
-						},
-						Value: &ast.IntegerLiteral{
-							Value: 1000,
-						},
-					},
-				},
-			},
-		},
-		{
-			name:  "Assign boolean",
-			input: `let enabled = true`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.LetStatement{
-						Name: &ast.Identifier{
-							Name: "enabled",
-						},
-						Value: &ast.Boolean{
-							Value: true,
-						},
-					},
-				},
-			},
-		},
+	}
+	assertParse(t, input, want)
+}
 
-		{
-			name: "Assign expression",
-			input: `
-				let five = 2 + 3
-				let ten = (5 + 5)
-				let zero = (10-5)*0
-				let result = calc()
-			`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.LetStatement{
-						Name: &ast.Identifier{
-							Name: "five",
-						},
-						Value: &ast.BinaryExpression{
-							Left:     &ast.IntegerLiteral{Value: 2},
-							Right:    &ast.IntegerLiteral{Value: 3},
-							Operator: "+",
-						},
-					},
-					&ast.LetStatement{
-						Name: &ast.Identifier{
-							Name: "ten",
-						},
-						Value: &ast.ParenExpression{
-							Expression: &ast.BinaryExpression{
-								Left:     &ast.IntegerLiteral{Value: 5},
-								Right:    &ast.IntegerLiteral{Value: 5},
+func TestParseFunc_Adder(t *testing.T) {
+	input := `fn add(a int, b int) int {}`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.Func{
+				Name: "add",
+				Params: []*ast.Parameter{
+					{Name: "a", Type: &ast.TypeLiteral{Type: "int"}},
+					{Name: "b", Type: &ast.TypeLiteral{Type: "int"}},
+				},
+				ReturnType: &ast.TypeLiteral{Type: "int"},
+				Body:       &ast.BlockStatement{},
+			},
+		},
+	}
+	assertParse(t, input, want)
+}
+
+func TestParseFunc_ReturnBinaryExpression(t *testing.T) {
+	input := `fn withreturn() { return 2 + 3 }`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.Func{
+				Name: "withreturn",
+				Body: &ast.BlockStatement{
+					Statements: []ast.Node{
+						&ast.ReturnStatement{
+							Value: &ast.BinaryExpression{
+								Left:     &ast.IntegerLiteral{Value: 2},
+								Right:    &ast.IntegerLiteral{Value: 3},
 								Operator: "+",
 							},
 						},
 					},
-					&ast.LetStatement{
-						Name: &ast.Identifier{
-							Name: "zero",
-						},
-						Value: &ast.BinaryExpression{
-							Left: &ast.ParenExpression{
-								Expression: &ast.BinaryExpression{
-									Left:     &ast.IntegerLiteral{Value: 10},
-									Right:    &ast.IntegerLiteral{Value: 5},
-									Operator: "-",
-								},
-							},
-							Right: &ast.IntegerLiteral{
-								Value: 0,
-							},
-							Operator: "*",
-						},
-					},
-					&ast.LetStatement{
-						Name: &ast.Identifier{
-							Name: "result",
-						},
-						Value: &ast.CallExpression{
-							Function:  &ast.Identifier{Name: "calc"},
-							Arguments: []ast.Expression{},
-						},
-					},
 				},
 			},
 		},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := NewParser(lexer.New([]byte(tt.input)))
-			got := p.Parse()
-			for _, msg := range p.Diagnostics.Items {
-				fmt.Println(msg.Text)
-			}
-			if diff := cmp.Diff(tt.want, got, cmpOpts...); diff != "" {
-				t.Errorf("parser.Parse() mismatch (-want +got):\nInput:%s\n%s", tt.input, diff)
-			}
-		})
-	}
+	assertParse(t, input, want)
 }
 
-func TestParseEnumStatement(t *testing.T) {
-	cmpOpts := []cmp.Option{
-		// cmpopts.IgnoreFields(token.Token{}, "Line", "Column"),
-	}
-
-	tests := []struct {
-		name  string
-		input string
-		want  ast.SourceFile
-	}{
-		{
-			name:  "Naked Enum",
-			input: `enum Message { Increment, Decrement, }`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Enum{
-						Name: "Message",
-						Members: []*ast.EnumMember{
-							{Name: "Increment", IntValue: 0, Value: nil},
-							{Name: "Decrement", IntValue: 1, Value: nil},
-						},
-					},
+func TestParseFunc_Generic(t *testing.T) {
+	input := `fn join<T>(a T, b T) T { }`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.Func{
+				Name: "join",
+				Params: []*ast.Parameter{
+					{Name: "a", Type: &ast.TypeIdentifier{Name: "T"}},
+					{Name: "b", Type: &ast.TypeIdentifier{Name: "T"}},
 				},
-			},
-		},
-		{
-			name:  "Backed Enum",
-			input: `enum Message { Increment = 0, Decrement = 1, }`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Enum{
-						Name: "Message",
-						Members: []*ast.EnumMember{
-							{Name: "Increment", IntValue: 0, Value: &ast.IntegerLiteral{Value: 0}},
-							{Name: "Decrement", IntValue: 1, Value: &ast.IntegerLiteral{Value: 1}},
-						},
-					},
-				},
-			},
-		},
-		{
-			name:  "Backed Enum with inferred values",
-			input: `enum Message { Increment = 1, Decrement, }`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Enum{
-						Name: "Message",
-						Members: []*ast.EnumMember{
-							{Name: "Increment", IntValue: 1, Value: &ast.IntegerLiteral{Value: 1}},
-							{Name: "Decrement", IntValue: 2, Value: nil},
-						},
-					},
-				},
-			},
-		},
-		{
-			name:  "Backed Enum with mixed values",
-			input: `enum Message { Increment = 1, Decrement = "down", Clear, }`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Enum{
-						Name: "Message",
-						Members: []*ast.EnumMember{
-							{Name: "Increment", IntValue: 1, Value: &ast.IntegerLiteral{Value: 1}},
-							{Name: "Decrement", IntValue: 2, Value: &ast.StringLiteral{Value: "down"}},
-							{Name: "Clear", IntValue: 3, Value: nil},
-						},
-					},
-				},
+				TypeParams: []*ast.TypeParameter{{Name: "T"}},
+				ReturnType: &ast.TypeIdentifier{Name: "T"},
+				Body:       &ast.BlockStatement{},
 			},
 		},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := NewParser(lexer.New([]byte(tt.input)))
-			got := p.Parse()
-			for _, msg := range p.Diagnostics.Items {
-				fmt.Println(msg.Text)
-			}
-			if diff := cmp.Diff(tt.want, got, cmpOpts...); diff != "" {
-				t.Errorf("parser.Parse() mismatch (-want +got):\nInput:%s\n%s", tt.input, diff)
-			}
-		})
-	}
+	assertParse(t, input, want)
 }
 
-func TestParseUnionStatement(t *testing.T) {
-	cmpOpts := []cmp.Option{
-		// cmpopts.IgnoreFields(token.Token{}, "Line", "Column"),
-	}
+// --- Let Statement Tests ---
 
-	tests := []struct {
-		name  string
-		input string
-		want  ast.SourceFile
-	}{
-		{
-			name:  "Naked Union",
-			input: `union Message { Increment, Decrement, }`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Union{
-						Name: "Message",
-						Fields: []*ast.UnionField{
-							{Name: "Increment", Type: nil},
-							{Name: "Decrement", Type: nil},
+func TestParseLet_String(t *testing.T) {
+	input := `let msg = "hello world"`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.LetStatement{
+				Name:  &ast.Identifier{Name: "msg"},
+				Value: &ast.StringLiteral{Value: "hello world"},
+			},
+		},
+	}
+	assertParse(t, input, want)
+}
+
+func TestParseLet_ComplexExpression(t *testing.T) {
+	input := `let zero = (10-5)*0`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.LetStatement{
+				Name: &ast.Identifier{Name: "zero"},
+				Value: &ast.BinaryExpression{
+					Left: &ast.ParenExpression{
+						Expression: &ast.BinaryExpression{
+							Left:     &ast.IntegerLiteral{Value: 10},
+							Right:    &ast.IntegerLiteral{Value: 5},
+							Operator: "-",
 						},
 					},
+					Right:    &ast.IntegerLiteral{Value: 0},
+					Operator: "*",
 				},
 			},
 		},
-		{
-			name: "Union with literal types",
-			input: `
-				union Message {
-					Increment(int),
-					Decrement(int),
-					Reset(string),
-					Done(bool),
-				}
-			`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Union{
-						Name: "Message",
-						Fields: []*ast.UnionField{
-							{Name: "Increment", Type: &ast.TypeLiteral{Type: "int"}},
-							{Name: "Decrement", Type: &ast.TypeLiteral{Type: "int"}},
-							{Name: "Reset", Type: &ast.TypeLiteral{Type: "string"}},
-							{Name: "Done", Type: &ast.TypeLiteral{Type: "bool"}},
-						},
-					},
+	}
+	assertParse(t, input, want)
+}
+
+// --- Enum Tests ---
+
+func TestParseEnum_MixedValues(t *testing.T) {
+	input := `enum Message { Increment = 1, Decrement = "down", Clear, }`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.Enum{
+				Name: "Message",
+				Members: []*ast.EnumMember{
+					{Name: "Increment", IntValue: 1, Value: &ast.IntegerLiteral{Value: 1}},
+					{Name: "Decrement", IntValue: 2, Value: &ast.StringLiteral{Value: "down"}},
+					{Name: "Clear", IntValue: 3, Value: nil},
 				},
 			},
 		},
-		{
-			name: "Union with struct types",
-			input: `
-				union Shape {
-					Square({ size: int }),
-					Rectangle({ width: int, height: int, }),
-					Circle({ radius: int, }),
-				}
-			`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Union{
-						Name: "Shape",
-						Fields: []*ast.UnionField{
-							{Name: "Square", Type: &ast.StructBody{
-								Fields: []*ast.StructField{
-									{Name: "size", Type: &ast.TypeLiteral{Type: "int"}},
-								},
-							}},
-							{Name: "Rectangle", Type: &ast.StructBody{
-								Fields: []*ast.StructField{
-									{Name: "width", Type: &ast.TypeLiteral{Type: "int"}},
-									{Name: "height", Type: &ast.TypeLiteral{Type: "int"}},
-								},
-							}},
-							{Name: "Circle", Type: &ast.StructBody{
-								Fields: []*ast.StructField{
-									{Name: "radius", Type: &ast.TypeLiteral{Type: "int"}},
-								},
-							}},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "Union with type identifiers",
-			input: `
-				union Shape {
-					Square(Square),
-					Rectangle(Rectangle),
-					Circle(Circle),
-				}
-			`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Union{
-						Name: "Shape",
-						Fields: []*ast.UnionField{
-							{Name: "Square", Type: &ast.TypeIdentifier{Name: "Square"}},
-							{Name: "Rectangle", Type: &ast.TypeIdentifier{Name: "Rectangle"}},
-							{Name: "Circle", Type: &ast.TypeIdentifier{Name: "Circle"}},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "Union with type paramters",
-			input: `
-				union Option<T> {
-					Some(T),
-					None,
-				}
-			`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Union{
-						Name: "Option",
-						Parameters: []*ast.TypeParameter{
-							{Name: "T"},
-						},
-						Fields: []*ast.UnionField{
-							{
-								Name: "Some",
-								Type: &ast.TypeIdentifier{
-									Name: "T",
-								},
-							},
-							{
-								Name: "None",
-								Type: nil,
+	}
+	assertParse(t, input, want)
+}
+
+// --- Union Tests ---
+
+func TestParseUnion_WithStructTypes(t *testing.T) {
+	input := `
+		union Shape {
+			Square({ size: int }),
+		}
+	`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.Union{
+				Name: "Shape",
+				Fields: []*ast.UnionField{
+					{
+						Name: "Square",
+						Type: &ast.StructBody{
+							Fields: []*ast.StructField{
+								{Name: "size", Type: &ast.TypeLiteral{Type: "int"}},
 							},
 						},
 					},
@@ -595,88 +193,41 @@ func TestParseUnionStatement(t *testing.T) {
 			},
 		},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := NewParser(lexer.New([]byte(tt.input)))
-			got := p.Parse()
-			for _, msg := range p.Diagnostics.Items {
-				fmt.Println(msg.Text)
-			}
-			if diff := cmp.Diff(tt.want, got, cmpOpts...); diff != "" {
-				t.Errorf("parser.Parse() mismatch (-want +got):\nInput:%s\n%s", tt.input, diff)
-			}
-		})
-	}
-
+	assertParse(t, input, want)
 }
 
-func TestParseStruct(t *testing.T) {
-	cmpOpts := []cmp.Option{
-		// cmpopts.IgnoreFields(token.Token{}, "Line", "Column"),
-	}
-
-	tests := []struct {
-		name  string
-		input string
-		want  ast.SourceFile
-	}{
-		{
-			name: "User struct",
-			input: `
-				struct User {
-					name: string,
-					age: int,
-				}
-			`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Struct{
-						Name: "User",
-						Fields: []*ast.StructField{
-							{Name: "name", Type: &ast.TypeLiteral{Type: "string"}},
-							{Name: "age", Type: &ast.TypeLiteral{Type: "int"}},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "Generic struct",
-			input: `
-				struct Point<T> {
-					x: T,
-					y: T,
-				}
-			`,
-			want: ast.SourceFile{
-				Declarations: []ast.Node{
-					&ast.Struct{
-						Name: "Point",
-						Params: []*ast.TypeParameter{
-							{Name: "T"},
-						},
-						Fields: []*ast.StructField{
-							{Name: "x", Type: &ast.TypeIdentifier{Name: "T"}},
-							{Name: "y", Type: &ast.TypeIdentifier{Name: "T"}},
-						},
-					},
+func TestParseUnion_Generic(t *testing.T) {
+	input := `union Option<T> { Some(T), None }`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.Union{
+				Name:       "Option",
+				Parameters: []*ast.TypeParameter{{Name: "T"}},
+				Fields: []*ast.UnionField{
+					{Name: "Some", Type: &ast.TypeIdentifier{Name: "T"}},
+					{Name: "None", Type: nil},
 				},
 			},
 		},
 	}
+	assertParse(t, input, want)
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			p := NewParser(lexer.New([]byte(tt.input)))
-			got := p.Parse()
-			for _, msg := range p.Diagnostics.Items {
-				fmt.Println(msg.Text)
-			}
-			if diff := cmp.Diff(tt.want, got, cmpOpts...); diff != "" {
-				t.Errorf("parser.Parse() mismatch (-want +got):\nInput:%s\n%s", tt.input, diff)
-			}
-		})
+// --- Struct Tests ---
+
+func TestParseStruct_Generic(t *testing.T) {
+	input := `struct Point<T> { x: T, y: T }`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.Struct{
+				Name:   "Point",
+				Params: []*ast.TypeParameter{{Name: "T"}},
+				Fields: []*ast.StructField{
+					{Name: "x", Type: &ast.TypeIdentifier{Name: "T"}},
+					{Name: "y", Type: &ast.TypeIdentifier{Name: "T"}},
+				},
+			},
+		},
 	}
-
+	assertParse(t, input, want)
 }

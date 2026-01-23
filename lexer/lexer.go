@@ -26,7 +26,7 @@ var keywords = map[string]token.TokenType{
 
 var builtins = map[string]token.TokenType{
 	"bool":   token.TYPE_BOOL,
-	"string": token.TYPE_BOOL,
+	"string": token.TYPE_STRING,
 	"int":    token.TYPE_INT,
 }
 
@@ -39,11 +39,13 @@ type Lexer struct {
 	col  int
 	char rune
 
-	braceDepth    int  // Tracks nested expressions when inside elements
+	braceDepth    int // Tracks nested expressions when inside elements
+	tagBraceDepth int
 	elementDepth  int  // Tracks nested elements
 	insideOpenTag bool // Tracks if we are lexing an element tag which has not yet been terminated by > or />
 
 	tokenBuffer []token.Token
+	lastToken   *token.Token
 }
 
 func New(input []byte) *Lexer {
@@ -51,6 +53,13 @@ func New(input []byte) *Lexer {
 		input: input,
 		char:  rune(input[0]),
 	}
+
+	if len(input) > 0 {
+		lex.char = rune(input[0])
+	} else {
+		lex.char = 0
+	}
+
 	return lex
 }
 
@@ -223,7 +232,7 @@ func (l *Lexer) readIdentifer() token.Token {
 	start := l.pos
 	startCol := l.col
 
-	for l.pos < len(l.input) && (unicode.IsLetter(l.char) || unicode.IsDigit(l.char)) {
+	for l.pos < len(l.input) && (isLetter(l.char) || isDigit(l.char) || l.char == '_') {
 		l.advance()
 	}
 
@@ -247,6 +256,7 @@ func (l *Lexer) readTagStart() []token.Token {
 
 	// Update State
 	l.elementDepth++
+	l.tagBraceDepth = l.braceDepth
 	l.insideOpenTag = true
 
 	return tokens
@@ -306,6 +316,7 @@ func (l *Lexer) NextToken() token.Token {
 	if len(l.tokenBuffer) > 0 {
 		t := l.tokenBuffer[0]
 		l.tokenBuffer = l.tokenBuffer[1:]
+		l.lastToken = &t
 		return t
 	}
 
@@ -322,7 +333,9 @@ func (l *Lexer) NextToken() token.Token {
 			// If we hit '{', we switch to Code Mode (handled below in standard switch)
 			// Otherwise, it is text.
 			if l.char != '<' && l.char != '{' {
-				return l.readElementText()
+				t := l.readElementText()
+				l.lastToken = &t
+				return t
 			}
 		}
 
@@ -331,7 +344,7 @@ func (l *Lexer) NextToken() token.Token {
 		// Inside an opening tag definition <div ... >
 		// But NOT inside an attribute expression like prop={...}
 		// ----------------------------------------------------------------
-		if l.insideOpenTag && l.braceDepth == 0 {
+		if l.insideOpenTag && l.braceDepth == l.tagBraceDepth {
 			// 1. Ignore whitespace
 			if unicode.IsSpace(l.char) {
 				if l.char == '\n' {
@@ -347,6 +360,7 @@ func (l *Lexer) NextToken() token.Token {
 				t := token.Token{Type: token.ELEMENT_OPEN_END, Literal: ">", Line: l.line, Column: startCol}
 				l.insideOpenTag = false
 				l.advance()
+				l.lastToken = &t
 				return t
 			}
 
@@ -358,6 +372,7 @@ func (l *Lexer) NextToken() token.Token {
 					l.elementDepth--
 					l.advance()
 					l.advance()
+					l.lastToken = &t
 					return t
 				}
 			}
@@ -368,6 +383,7 @@ func (l *Lexer) NextToken() token.Token {
 				t := token.Token{Type: token.LBRACE, Literal: "{", Line: l.line, Column: startCol}
 				l.braceDepth++
 				l.advance()
+				l.lastToken = &t
 				return t
 			}
 
@@ -375,17 +391,22 @@ func (l *Lexer) NextToken() token.Token {
 			if l.char == '=' {
 				t := token.Token{Type: token.ASSIGN, Literal: "=", Line: l.line, Column: startCol}
 				l.advance()
+				l.lastToken = &t
 				return t
 			}
 
 			// 5. String Literal Attribute Values (e.g. class="foo")
 			if l.char == '"' {
-				return l.readString()
+				t := l.readString()
+				l.lastToken = &t
+				return t
 			}
 
 			// 6. Attribute Names (Ident)
 			if unicode.IsLetter(l.char) {
-				return l.readAttributeName()
+				t := l.readAttributeName()
+				l.lastToken = &t
+				return t
 			}
 		}
 
@@ -404,42 +425,58 @@ func (l *Lexer) NextToken() token.Token {
 		}
 
 		// Identifiers, Keywords, and Builtins
-		if unicode.IsLetter(l.char) {
+		if isLetter(l.char) || l.char == '_' {
 			identToken := l.readIdentifer()
 
 			// Text is a keyword?
 			if tokenType, ok := keywords[identToken.Literal]; ok {
 				identToken.Type = tokenType
+				l.lastToken = &identToken
 				return identToken
 			}
 
 			// Text is a builtin?
 			if tokenType, ok := builtins[identToken.Literal]; ok {
 				identToken.Type = tokenType
+				l.lastToken = &identToken
 				return identToken
 			}
 
+			l.lastToken = &identToken
 			return identToken
 		}
 
 		// Numbers
-		if unicode.IsDigit(l.char) {
-			return l.readDigits()
+		if isDigit(l.char) {
+			t := l.readDigits()
+			l.lastToken = &t
+			return t
 		}
 
 		// Strings
 		if l.char == '"' {
-			return l.readString()
+			t := l.readString()
+			l.lastToken = &t
+			return t
 		}
 
 		// Check for Tag Start
-		if l.char == '<' {
+
+		// These patterns should not be treated as elements
+		// union Option<T> {}
+		// struct Point<T> { x: T, y: T }
+		// fn join<T>(a: T, b: T) T {}
+
+		if l.char == '<' && !maybeExpectingGenericParameters(l.lastToken) {
+
 			// Check if it is a closing tag </...
 			next, hasNext := l.peek()
+
 			if hasNext && next == '/' {
 				if toks, ok := l.tryReadTagEnd(); ok {
 					t := toks[0]
 					l.tokenBuffer = append(l.tokenBuffer, toks[1:]...)
+					l.lastToken = &t
 					return t
 				}
 			}
@@ -449,6 +486,7 @@ func (l *Lexer) NextToken() token.Token {
 				toks := l.readTagStart()
 				t := toks[0]
 				l.tokenBuffer = append(l.tokenBuffer, toks[1:]...)
+				l.lastToken = &t
 				return t
 			}
 		}
@@ -569,8 +607,29 @@ func (l *Lexer) NextToken() token.Token {
 
 		t := token.Token{Type: tt, Literal: tl, Line: l.line, Column: startCol}
 		l.advance()
+		l.lastToken = &t
 		return t
 	}
 
 	return token.Token{Type: token.EOF, Line: l.line, Column: l.col}
+}
+
+// helpers
+
+func isDigit(ch rune) bool {
+	return ch >= '0' && ch <= '9'
+}
+
+func isLetter(ch rune) bool {
+	return ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z'
+}
+
+func maybeExpectingGenericParameters(tok *token.Token) bool {
+	if tok != nil {
+		switch tok.Type {
+		case token.IDENT:
+			return true
+		}
+	}
+	return false
 }

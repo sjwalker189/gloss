@@ -88,6 +88,17 @@ func TestNextToken(t *testing.T) {
 		},
 
 		{
+			name:  "Builtin tokens",
+			input: "string int bool",
+			want: []token.Token{
+				{Type: token.TYPE_STRING, Literal: "string"},
+				{Type: token.TYPE_INT, Literal: "int"},
+				{Type: token.TYPE_BOOL, Literal: "bool"},
+				{Type: token.EOF},
+			},
+		},
+
+		{
 			name: "Literal type tokens",
 			input: `
 			0
@@ -258,6 +269,94 @@ func TestNextToken(t *testing.T) {
 				{Type: token.LPAREN, Literal: "("},
 				{Type: token.RPAREN, Literal: ")"},
 				{Type: token.LBRACE, Literal: "{"},
+				{Type: token.RBRACE, Literal: "}"},
+				{Type: token.EOF},
+			},
+		},
+		{
+			name:  "Generic func parameters",
+			input: `fn print<T>() {}`,
+			want: []token.Token{
+				{Type: token.FUNC, Literal: "fn"},
+				{Type: token.IDENT, Literal: "print"},
+				{Type: token.LANGLE, Literal: "<"},
+				{Type: token.IDENT, Literal: "T"},
+				{Type: token.RANGLE, Literal: ">"},
+				{Type: token.LPAREN, Literal: "("},
+				{Type: token.RPAREN, Literal: ")"},
+				{Type: token.LBRACE, Literal: "{"},
+				{Type: token.RBRACE, Literal: "}"},
+				{Type: token.EOF},
+			},
+		},
+		{
+			name:  "Generic struct parameters",
+			input: `struct Point<T> { }`,
+			want: []token.Token{
+				{Type: token.STRUCT, Literal: "struct"},
+				{Type: token.IDENT, Literal: "Point"},
+				{Type: token.LANGLE, Literal: "<"},
+				{Type: token.IDENT, Literal: "T"},
+				{Type: token.RANGLE, Literal: ">"},
+				{Type: token.LBRACE, Literal: "{"},
+				{Type: token.RBRACE, Literal: "}"},
+				{Type: token.EOF},
+			},
+		},
+		{
+			name:  "Generic union parameters",
+			input: `union Option<T> { Some(T), None }`,
+			want: []token.Token{
+				{Type: token.UNION, Literal: "union"},
+				{Type: token.IDENT, Literal: "Option"},
+				{Type: token.LANGLE, Literal: "<"},
+				{Type: token.IDENT, Literal: "T"},
+				{Type: token.RANGLE, Literal: ">"},
+				{Type: token.LBRACE, Literal: "{"},
+				{Type: token.IDENT, Literal: "Some"},
+				{Type: token.LPAREN, Literal: "("},
+				{Type: token.IDENT, Literal: "T"},
+				{Type: token.RPAREN, Literal: ")"},
+				{Type: token.COMMA, Literal: ","},
+				{Type: token.IDENT, Literal: "None"},
+				{Type: token.RBRACE, Literal: "}"},
+				{Type: token.EOF},
+			},
+		},
+
+		{
+			name: "Func returning element",
+			input: `
+			fn App<T>(value: T) Element {
+					return (
+						<Message value={value} />
+					)
+				}
+			`,
+			want: []token.Token{
+				{Type: token.FUNC, Literal: "fn"},
+				{Type: token.IDENT, Literal: "App"},
+				{Type: token.LANGLE, Literal: "<"},
+				{Type: token.IDENT, Literal: "T"},
+				{Type: token.RANGLE, Literal: ">"},
+				{Type: token.LPAREN, Literal: "("},
+				{Type: token.IDENT, Literal: "value"},
+				{Type: token.COLON, Literal: ":"},
+				{Type: token.IDENT, Literal: "T"},
+				{Type: token.RPAREN, Literal: ")"},
+				{Type: token.IDENT, Literal: "Element"},
+				{Type: token.LBRACE, Literal: "{"},
+				{Type: token.RETURN, Literal: "return"},
+				{Type: token.LPAREN, Literal: "("},
+				{Type: token.ELEMENT_OPEN_START, Literal: "<"},
+				{Type: token.ELEMENT_IDENT, Literal: "Message"},
+				{Type: token.ELEMENT_ATTR, Literal: "value"},
+				{Type: token.ASSIGN, Literal: "="},
+				{Type: token.LBRACE, Literal: "{"},
+				{Type: token.IDENT, Literal: "value"},
+				{Type: token.RBRACE, Literal: "}"},
+				{Type: token.ELEMENT_VOID_END, Literal: "/>"},
+				{Type: token.RPAREN, Literal: ")"},
 				{Type: token.RBRACE, Literal: "}"},
 				{Type: token.EOF},
 			},

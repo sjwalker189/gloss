@@ -192,6 +192,26 @@ func TestParseFunction(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:  "generic func",
+			input: `fn join<T>(a T, b T) T { }`,
+			want: ast.SourceFile{
+				Declarations: []ast.Node{
+					&ast.Func{
+						Name: "join",
+						TypeParams: []*ast.TypeParameter{
+							{Name: "T"},
+						},
+						Params: []*ast.Parameter{
+							{Name: "a", Type: &ast.TypeIdentifier{Name: "T"}},
+							{Name: "b", Type: &ast.TypeIdentifier{Name: "T"}},
+						},
+						ReturnType: &ast.TypeIdentifier{Name: "T"},
+						Body:       nil,
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -543,7 +563,7 @@ func TestParseUnionStatement(t *testing.T) {
 		{
 			name: "Union with type paramters",
 			input: `
-				union Option(T) {
+				union Option<T> {
 					Some(T),
 					None,
 				}

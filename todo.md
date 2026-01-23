@@ -1,26 +1,20 @@
-## TODO
+## TODO's
 
 ### Lexing
-
-- Logical operators (==, !=, >=, <=)
-- Assignment operations (++, --, +=, /=, etc)
-- Signed integers
+- Signed numbers
 - Floats
 - Big number representation
-- Keywords (TBC: loop, while, union, break)
-- Builtin types (string, int, float, etc)
+- Generics vs Elements (both using <T>, should not be open tag in context of code)
 
 
 ### Parsing
 - Control flows (if/else, switch, etc)
 - Loops
-- Enums
 - Structs
-- Unions (tagged)
 - Elements
-- Import statements
+- Generics
 - Visibility
-- Separate Types/Generics from Identifiers
+- Modules
 
 
 ## Future

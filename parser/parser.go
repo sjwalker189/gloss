@@ -2,6 +2,7 @@ package parser
 
 import (
 	"gloss/ast"
+	"gloss/diagnostic"
 	"gloss/lexer"
 	"gloss/token"
 	"strconv"
@@ -18,7 +19,7 @@ type Parser struct {
 	curToken  token.Token
 	peekToken token.Token
 
-	Diagnostics *DiagnosticList
+	Diagnostics *diagnostic.MessageList
 
 	prefixParseFunc map[token.TokenType]prefixExpParseFunc
 	infixParseFunc  map[token.TokenType]binaryExpParseFunc
@@ -27,7 +28,7 @@ type Parser struct {
 func NewParser(l *lexer.Lexer) *Parser {
 	p := &Parser{
 		lexer:       l,
-		Diagnostics: &DiagnosticList{},
+		Diagnostics: &diagnostic.MessageList{},
 	}
 	p.init()
 	return p

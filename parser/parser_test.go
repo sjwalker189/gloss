@@ -14,7 +14,8 @@ func assertParse(t *testing.T, input string, want ast.SourceFile) {
 	p := NewParser(lexer.New([]byte(input)))
 	got := p.Parse()
 
-	for _, msg := range p.Diagnostics.list {
+	// TODO: should fail test if any error diagnostics raised
+	for _, msg := range p.Diagnostics.Messages() {
 		fmt.Println(msg.Text)
 	}
 

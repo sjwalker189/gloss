@@ -161,8 +161,10 @@ type Tuple struct {
 }
 
 type Struct struct {
-	Name string
-	Body *StructBody
+	BaseNode
+	Name   string
+	Params []*TypeParameter
+	Fields []*StructField
 }
 
 type StructBody struct {

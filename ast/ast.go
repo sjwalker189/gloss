@@ -38,6 +38,10 @@ type Statement interface {
 	statementNode()
 }
 
+type Alternative interface {
+	alternativeNode()
+}
+
 type Identifier struct {
 	BaseNode
 	Token token.Token
@@ -50,7 +54,7 @@ type BinaryExpression struct {
 	Operator string
 }
 
-type PrefixExpression struct {
+type UnaryExpression struct {
 	Right    Expression
 	Operator string
 }
@@ -64,6 +68,7 @@ type CallExpression struct {
 	Arguments []Expression
 }
 
+// TODO: explore let assert ... syntax similar to gleam
 type LetStatement struct {
 	BaseNode
 	Token token.Token
@@ -74,6 +79,26 @@ type LetStatement struct {
 type BlockStatement struct {
 	BaseNode
 	Statements []Node
+}
+
+// TODO: statement or expression?
+type If struct {
+	BaseNode
+	Condition Expression
+	Then      *BlockStatement
+	Else      Alternative
+	// TODO: Else can be a block or another if condition
+}
+
+type Loop struct {
+	BaseNode
+	Body *BlockStatement
+}
+
+type For struct {
+	BaseNode
+	Condition Expression
+	Body      *BlockStatement
 }
 
 type Parameter struct {
@@ -139,6 +164,9 @@ type ReturnStatement struct {
 	Value Expression
 }
 
+type BreakStatement struct{ BaseNode }
+type ContinueStatement struct{ BaseNode }
+
 type IntegerLiteral struct {
 	BaseNode
 	Value  int64
@@ -190,10 +218,14 @@ func (n StructBody) typeNode()     {}
 
 // Denote expression nodes
 func (e BinaryExpression) expressionNode() {}
-func (e PrefixExpression) expressionNode() {}
+func (e UnaryExpression) expressionNode()  {}
 func (e ParenExpression) expressionNode()  {}
 func (e CallExpression) expressionNode()   {}
 func (e IntegerLiteral) expressionNode()   {}
 func (e StringLiteral) expressionNode()    {}
 func (e Boolean) expressionNode()          {}
 func (e Identifier) expressionNode()       {}
+
+// Denote alternative nodes (those that can be chained with if)
+func (n If) alternativeNode()             {}
+func (n BlockStatement) alternativeNode() {}

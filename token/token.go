@@ -77,6 +77,7 @@ const (
 	CASE                = "CASE"
 	DEFAULT             = "DEFAULT"
 	FOR                 = "FOR"
+	LOOP                = "LOOP"
 	CONTINUE            = "CONTINUE"
 	BREAK               = "BREAK"
 	RETURN              = "RETURN"

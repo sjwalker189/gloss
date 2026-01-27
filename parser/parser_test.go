@@ -232,3 +232,139 @@ func TestParseStruct_Generic(t *testing.T) {
 	}
 	assertParse(t, input, want)
 }
+
+// --- If/Else Tests ---
+
+func TestParseIf_ConstantCondition(t *testing.T) {
+	input := `if true { }`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.If{
+				Condition: &ast.Boolean{Value: true},
+				Then:      &ast.BlockStatement{},
+				Else:      nil,
+			},
+		},
+	}
+	assertParse(t, input, want)
+}
+
+func TestParseIf_WithElse(t *testing.T) {
+	input := `if true { } else { }`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.If{
+				Condition: &ast.Boolean{Value: true},
+				Then:      &ast.BlockStatement{},
+				Else:      &ast.BlockStatement{},
+			},
+		},
+	}
+	assertParse(t, input, want)
+}
+
+func TestParseIf_WithElseIf(t *testing.T) {
+	input := `if true { } else if false { }`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.If{
+				Condition: &ast.Boolean{Value: true},
+				Then:      &ast.BlockStatement{},
+				Else: &ast.If{
+					Condition: &ast.Boolean{Value: false},
+					Then:      &ast.BlockStatement{},
+					Else:      nil,
+				},
+			},
+		},
+	}
+	assertParse(t, input, want)
+}
+
+func TestParseIf_WithBinaryExpression(t *testing.T) {
+	input := `if 10 > 0 { }`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.If{
+				Condition: &ast.BinaryExpression{
+					Left:     &ast.IntegerLiteral{Value: 10},
+					Right:    &ast.IntegerLiteral{Value: 0},
+					Operator: ">",
+				},
+				Then: &ast.BlockStatement{},
+				Else: nil,
+			},
+		},
+	}
+	assertParse(t, input, want)
+}
+
+func TestParseIf_WithBinaryAndExpression(t *testing.T) {
+	input := `if 1 && 2 { }`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.If{
+				Condition: &ast.BinaryExpression{
+					Left:     &ast.IntegerLiteral{Value: 1},
+					Right:    &ast.IntegerLiteral{Value: 2},
+					Operator: "&&",
+				},
+				Then: &ast.BlockStatement{},
+				Else: nil,
+			},
+		},
+	}
+	assertParse(t, input, want)
+}
+
+func TestParseIf_WithUnaryExpression(t *testing.T) {
+	input := `if !false { }`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.If{
+				Condition: &ast.UnaryExpression{
+					Right:    &ast.Boolean{Value: false},
+					Operator: "!",
+				},
+				Then: &ast.BlockStatement{},
+				Else: nil,
+			},
+		},
+	}
+	assertParse(t, input, want)
+}
+
+// Loops
+
+func TestParseLoop_Loop(t *testing.T) {
+	input := `loop { break }`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.Loop{
+				Body: &ast.BlockStatement{
+					Statements: []ast.Node{
+						&ast.BreakStatement{},
+					},
+				},
+			},
+		},
+	}
+	assertParse(t, input, want)
+}
+
+func TestParseLoop_For(t *testing.T) {
+	input := `for a > 0 {  }`
+	want := ast.SourceFile{
+		Declarations: []ast.Node{
+			&ast.For{
+				Condition: &ast.BinaryExpression{
+					Left:     &ast.Identifier{Name: "a"},
+					Right:    &ast.IntegerLiteral{Value: 0},
+					Operator: ">",
+				},
+				Body: &ast.BlockStatement{},
+			},
+		},
+	}
+	assertParse(t, input, want)
+}

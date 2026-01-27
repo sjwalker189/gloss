@@ -9,6 +9,7 @@ var keywords = map[string]token.TokenType{
 	"if":       token.IF,
 	"else":     token.ELSE,
 	"for":      token.FOR,
+	"loop":     token.LOOP,
 	"break":    token.BREAK,
 	"continue": token.CONTINUE,
 	"switch":   token.SWITCH,

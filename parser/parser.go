@@ -9,8 +9,8 @@ import (
 )
 
 type (
-	prefixExpParseFunc func() ast.Expression
-	binaryExpParseFunc func(ast.Expression) ast.Expression
+	unaryExprParseFunc  func() ast.Expression
+	binaryExprParseFunc func(ast.Expression) ast.Expression
 )
 
 type Parser struct {
@@ -21,8 +21,8 @@ type Parser struct {
 
 	Diagnostics *diagnostic.MessageList
 
-	prefixParseFunc map[token.TokenType]prefixExpParseFunc
-	infixParseFunc  map[token.TokenType]binaryExpParseFunc
+	unaryExprParseFunc  map[token.TokenType]unaryExprParseFunc
+	binaryExprParseFunc map[token.TokenType]binaryExprParseFunc
 }
 
 func NewParser(l *lexer.Lexer) *Parser {
@@ -35,27 +35,46 @@ func NewParser(l *lexer.Lexer) *Parser {
 }
 
 func (p *Parser) init() {
-	p.prefixParseFunc = map[token.TokenType]prefixExpParseFunc{
+	p.unaryExprParseFunc = map[token.TokenType]unaryExprParseFunc{
 		token.BOOL:   p.parseBoolean,
 		token.INT:    p.parseIntegerLiteral,
 		token.STRING: p.parseStringLiteral,
 		token.IDENT:  p.parseIdent,
-		token.MINUS:  p.parsePrefixExpression,
-		token.BANG:   p.parsePrefixExpression,
+		token.MINUS:  p.parseUnaryExpression,
+		token.BANG:   p.parseUnaryExpression,
 		token.LPAREN: p.parseGroupedExpression,
 	}
 
-	p.infixParseFunc = map[token.TokenType]binaryExpParseFunc{
-		token.PLUS:   p.parseBinaryExpression,
-		token.MINUS:  p.parseBinaryExpression,
-		token.MUL:    p.parseBinaryExpression,
-		token.DIV:    p.parseBinaryExpression,
-		token.MOD:    p.parseBinaryExpression,
+	p.binaryExprParseFunc = map[token.TokenType]binaryExprParseFunc{
+		// Mathmatical
+		token.PLUS:  p.parseBinaryExpression,
+		token.MINUS: p.parseBinaryExpression,
+		token.MUL:   p.parseBinaryExpression,
+		token.DIV:   p.parseBinaryExpression,
+		token.MOD:   p.parseBinaryExpression,
+
+		// Equality
 		token.EQ:     p.parseBinaryExpression,
 		token.NOT_EQ: p.parseBinaryExpression,
+
+		// Comparison
+		token.LANGLE: p.parseBinaryExpression,
+		token.RANGLE: p.parseBinaryExpression,
 		token.LT:     p.parseBinaryExpression,
 		token.GT:     p.parseBinaryExpression,
-		token.AND:    p.parseBinaryExpression,
+		token.LT_EQ:  p.parseBinaryExpression,
+		token.GT_EQ:  p.parseBinaryExpression,
+
+		// Boolean
+		token.AND: p.parseBinaryExpression,
+		token.OR:  p.parseBinaryExpression,
+
+		// Bitwise
+		token.BITWISE_AND: p.parseBinaryExpression,
+		token.BITWISE_OR:  p.parseBinaryExpression,
+		token.BITSHIFTL:   p.parseBinaryExpression,
+		token.BITSHIFTR:   p.parseBinaryExpression,
+
 		token.LPAREN: p.parseCallExpression,
 	}
 	p.nextToken()
@@ -118,7 +137,37 @@ func (p *Parser) parseDeclarations() ast.Node {
 		return p.parseLetStatement()
 	case token.FUNC:
 		return p.parseFunc()
+	// TODO: Following only present to support testing, should move to parseStatements only
+	case token.IF:
+		return p.parseIfStatement()
+	case token.LOOP:
+		return p.parseLoopStatement()
+	case token.FOR:
+		return p.parseForStatement()
 	default:
+		// TODO: Raise error
+		return nil
+	}
+}
+
+func (p *Parser) parseStatements() ast.Node {
+	switch p.curToken.Type {
+	case token.LET:
+		return p.parseLetStatement()
+	case token.LOOP:
+		return p.parseLoopStatement()
+	case token.FOR:
+		return p.parseForStatement()
+	case token.IF:
+		return p.parseIfStatement()
+	case token.RETURN:
+		return p.parseReturnStatement()
+	case token.BREAK:
+		return &ast.BreakStatement{}
+	case token.CONTINUE:
+		return &ast.ContinueStatement{}
+	default:
+		// TODO: Raise error
 		return nil
 	}
 }
@@ -199,16 +248,32 @@ func (p *Parser) parseReturnStatement() *ast.ReturnStatement {
 
 func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	block := &ast.BlockStatement{}
+	p.nextToken()
+
 	for p.curToken.Type != token.RBRACE && p.curToken.Type != token.EOF {
-		switch p.curToken.Type {
-		case token.RETURN:
-			block.Statements = append(block.Statements, p.parseReturnStatement())
-		case token.LET:
-			block.Statements = append(block.Statements, p.parseLetStatement())
+		if stmt := p.parseStatements(); stmt != nil {
+			block.Statements = append(block.Statements, stmt)
 		}
 		p.nextToken()
 	}
+
 	return block
+}
+
+func (p *Parser) parseLoopStatement() *ast.Loop {
+	loop := &ast.Loop{}
+	p.expectNext(token.LBRACE, "Expected '{'")
+	loop.Body = p.parseBlockStatement()
+	return loop
+}
+
+func (p *Parser) parseForStatement() *ast.For {
+	loop := &ast.For{}
+	p.nextToken()
+	loop.Condition = p.parseExpression(LOWEST)
+	p.expectNext(token.LBRACE, "Expected '{'")
+	loop.Body = p.parseBlockStatement()
+	return loop
 }
 
 func (p *Parser) parseEnum() *ast.Enum {
@@ -350,17 +415,43 @@ func (p *Parser) parseStructBody() *ast.StructBody {
 	return body
 }
 
+// Control flow
+
+func (p *Parser) parseIfStatement() *ast.If {
+	stmt := &ast.If{}
+	p.nextToken()
+
+	stmt.Condition = p.parseExpression(LOWEST)
+
+	p.expectNext(token.LBRACE, "Expected '{'")
+	stmt.Then = p.parseBlockStatement()
+
+	if p.peekToken.Type == token.ELSE {
+		p.nextToken()
+
+		if p.peekToken.Type == token.IF {
+			p.nextToken()
+			stmt.Else = p.parseIfStatement()
+		} else {
+			p.expectNext(token.LBRACE, "Expected '{'")
+			stmt.Else = p.parseBlockStatement()
+		}
+	}
+
+	return stmt
+}
+
 // Expressions (Pratt)
 
 func (p *Parser) parseExpression(precedence int) ast.Expression {
-	prefix := p.prefixParseFunc[p.curToken.Type]
+	prefix := p.unaryExprParseFunc[p.curToken.Type]
 	if prefix == nil {
 		return nil
 	}
 	leftExp := prefix()
 
 	for p.peekToken.Type != token.SEMICOLON && p.peekToken.Type != token.RBRACE && precedence < p.peekPrecedence() {
-		infix := p.infixParseFunc[p.peekToken.Type]
+		infix := p.binaryExprParseFunc[p.peekToken.Type]
 		if infix == nil {
 			return leftExp
 		}
@@ -387,8 +478,8 @@ func (p *Parser) parseBoolean() ast.Expression {
 	return &ast.Boolean{Value: p.curToken.Literal == "true"}
 }
 
-func (p *Parser) parsePrefixExpression() ast.Expression {
-	expr := &ast.PrefixExpression{Operator: p.curToken.Literal}
+func (p *Parser) parseUnaryExpression() ast.Expression {
+	expr := &ast.UnaryExpression{Operator: p.curToken.Literal}
 	p.nextToken()
 	expr.Right = p.parseExpression(PREFIX)
 	return expr

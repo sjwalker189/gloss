@@ -10,6 +10,8 @@
 
 
 ### Parsing
+- [ ] Comments
+- [ ] New lines
 - [ ] Control flow
     - [x] if
     - [x] if else

@@ -1,0 +1,19 @@
+// runtime.gloss
+
+extern date {
+	now() int
+}
+
+
+
+// app.gloss
+
+fn App() Element {
+	let time = date.now()
+
+	return <div>
+		{if time > 0 {
+			Current time: {time}
+		}}
+	</div>
+}

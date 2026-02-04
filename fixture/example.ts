@@ -1,0 +1,4 @@
+enum Switch {
+  On,
+  Off,
+}

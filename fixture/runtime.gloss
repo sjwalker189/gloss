@@ -1,0 +1,4 @@
+extern fn div(
+	id?: string
+	class?: string
+) Element 

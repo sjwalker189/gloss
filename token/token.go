@@ -94,10 +94,3 @@ const (
 	TYPE_INT    = "T_INT"
 	TYPE_BOOL   = "T_BOOl"
 )
-
-const (
-	TypeString = "string"
-	TypeInt    = "int"
-	TypeFloat  = "float"
-	TypeBool   = "bool"
-)

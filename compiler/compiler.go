@@ -39,15 +39,7 @@ func (c *Go) outdent() {
 
 func (c *Go) emitIndent() {
 	if c.indentLevel > 0 {
-		c.emit("%s", strings.Repeat(" ", c.indentLevel*c.indentSize))
-	}
-}
-
-func (c *Go) Compile(file *ast.SourceFile) {
-	c.emit("package %s\n\n", c.packageName)
-
-	for _, node := range file.Declarations {
-		c.compileNode(node)
+		_, _ = fmt.Fprintf(c.writer, "%s", strings.Repeat(" ", c.indentLevel*c.indentSize))
 	}
 }
 
@@ -58,48 +50,75 @@ func (c *Go) emit(format string, args ...any) {
 	}
 }
 
+func (c *Go) Compile(file *ast.SourceFile) {
+	c.emit("package %s\n\n", c.packageName)
+
+	for _, decl := range file.Declarations {
+		c.compileDeclaration(decl)
+		c.emit("\n\n")
+	}
+}
+
+func (c *Go) compileDeclaration(decl ast.Declaration) {
+	switch d := decl.(type) {
+	case *ast.FunctionDeclaration:
+		c.compileFunctionDeclaration(d)
+	// TODO: Handle other declarations
+	default:
+		c.emit("// Unknown declaration type: %T", d)
+	}
+}
+
 func (c *Go) compileNode(node ast.Node) {
 	switch n := node.(type) {
-	case *ast.IntegerLiteral:
-		c.compileIntegerLiteral(n)
-	case *ast.ReturnStatement:
-		c.compileReturnStatement(n)
-	case *ast.Func:
-		c.compileFunc(n)
+	case ast.Statement:
+		c.compileStatement(n)
+	case ast.Expression:
+		c.compileExpression(n)
+	case ast.Declaration:
+		c.compileDeclaration(n)
 	default:
+		c.emit("// Unknown node type: %T", n)
+	}
+}
+
+func (c *Go) compileStatement(stmt ast.Statement) {
+	switch s := stmt.(type) {
+	case *ast.ReturnStatement:
+		c.compileReturnStatement(s)
+	case *ast.BlockStatement:
+		c.compileBlockStatement(s)
+	// TODO: Other statements
+	default:
+		c.emit("// Unknown statement type: %T", s)
 	}
 }
 
 func (c *Go) compileType(node ast.Type) {
 	switch t := node.(type) {
 	case *ast.TypeIdentifier:
-		c.compileTypeIdentifier(t)
-	case *ast.TypeLiteral:
-		c.emit("%s", t.Type)
+		c.emit("%s", t.Name)
+	case *ast.PrimitiveType:
+		c.emit("%s", t.Name)
+	default:
+		c.emit("any") // Fallback
 	}
-}
-
-func (c *Go) compileTypeIdentifier(node *ast.TypeIdentifier) {
-	c.emit("%s", node.Name)
-	// TODO: node.Parameters
 }
 
 // Declarations
 
-func (c *Go) compileFunc(node *ast.Func) {
-	// TODO: Format func name for go conventions, e.g. pub fn sum = func Sum
+func (c *Go) compileFunctionDeclaration(node *ast.FunctionDeclaration) {
 	c.emit("func %s", node.Name)
 
-	count := len(node.Params)
-
-	// TODO: generic arguments
-
 	c.emit("(")
-	for i := range count {
-		param := node.Params[i]
+	for i, param := range node.Parameters {
 		c.emit("%s ", param.Name)
-		c.compileType(param.Type)
-		if i < count-1 {
+		if param.Type != nil {
+			c.compileType(param.Type)
+		} else {
+			c.emit("any")
+		}
+		if i < len(node.Parameters)-1 {
 			c.emit(", ")
 		}
 	}
@@ -111,7 +130,9 @@ func (c *Go) compileFunc(node *ast.Func) {
 	}
 
 	c.emit(" ")
-	c.compileBlockStatement(node.Body)
+	if node.Body != nil {
+		c.compileBlockStatement(node.Body)
+	}
 }
 
 // Statements
@@ -122,13 +143,13 @@ func (c *Go) compileBlockStatement(node *ast.BlockStatement) {
 	for _, stmt := range node.Statements {
 		c.emit("\n")
 		c.emitIndent()
-		c.compileNode(stmt)
+		c.compileStatement(stmt)
 	}
 	c.outdent()
 	if len(node.Statements) > 0 {
 		c.emit("\n")
+		c.emitIndent()
 	}
-
 	c.emit("}")
 }
 
@@ -152,12 +173,14 @@ func (c *Go) compileExpression(exp ast.Expression) {
 		c.compileIntegerLiteral(t)
 	case *ast.Identifier:
 		c.compileIdentifier(t)
+	default:
+		c.emit("/* expr %T */", t)
 	}
 }
 
 func (c *Go) compileUnaryExpression(exp *ast.UnaryExpression) {
 	c.emit("%s", exp.Operator)
-	c.compileExpression(exp.Right)
+	c.compileExpression(exp.Operand)
 }
 
 func (c *Go) compileBinaryExpression(exp *ast.BinaryExpression) {

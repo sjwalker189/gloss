@@ -9,26 +9,35 @@ var keywords = map[string]token.TokenType{
 	"if":       token.IF,
 	"else":     token.ELSE,
 	"for":      token.FOR,
+	"while":    token.WHILE,
 	"loop":     token.LOOP,
 	"break":    token.BREAK,
 	"continue": token.CONTINUE,
 	"switch":   token.SWITCH,
+	"match":    token.MATCH,
 	"case":     token.CASE,
 	"default":  token.DEFAULT,
 	"return":   token.RETURN,
 	"let":      token.LET,
+	"const":    token.CONST,
 	"fn":       token.FUNC,
 	"enum":     token.ENUM,
 	"union":    token.UNION,
 	"struct":   token.STRUCT,
+	"type":     token.TYPE,
+	"use":      token.USE,
+	"pub":      token.PUB,
+	"in":       token.IN,
 	"true":     token.BOOL,
 	"false":    token.BOOL,
+	"nil":      token.NIL,
 }
 
 var builtins = map[string]token.TokenType{
 	"bool":   token.TYPE_BOOL,
 	"string": token.TYPE_STRING,
 	"int":    token.TYPE_INT,
+	"void":   token.TYPE_VOID,
 }
 
 type Lexer struct {
@@ -237,9 +246,19 @@ func (l *Lexer) readIdentifer() token.Token {
 		l.advance()
 	}
 
+	literal := string(l.input[start:l.pos])
+	var tokenType token.TokenType = token.IDENT
+
+	// Check if it starts with an uppercase letter to be a TYPE_IDENT
+	// We check the first rune.
+	firstRune := rune(l.input[start])
+	if unicode.IsUpper(firstRune) {
+		tokenType = token.TYPE_IDENT
+	}
+
 	return token.Token{
-		Type:    token.IDENT,
-		Literal: string(l.input[start:l.pos]),
+		Type:    tokenType,
+		Literal: literal,
 		Line:    l.line,
 		Column:  startCol,
 	}
@@ -507,16 +526,72 @@ func (l *Lexer) NextToken() token.Token {
 			tt = token.PERIOD
 		case ',':
 			tt = token.COMMA
+		case '?':
+			if next, ok := l.peek(); ok && next == '.' {
+				tt = token.QUESTION_DOT
+				tl = "?."
+				l.advance()
+			} else {
+				// Assuming standard '?' token exists or treat as illegal/unexpected for now if not in grammar
+				// Grammar doesn't explicitly show ternary '?', but it's good to have.
+				// Wait, grammar does NOT have ternary. It uses 'if'.
+				// But we should probably just return ILLEGAL or a simple QUESTION token if we had one.
+				// Since we don't have QUESTION token, let's treat it as ILLEGAL for now or maybe just a single char token.
+				// I'll define it as ILLEGAL unless I add QUESTION token.
+				// Actually, let's add QUESTION token to token.go? No, user didn't ask for it.
+				// But wait, `?.` is in grammar.
+				// Let's just handle `?.` and fallback to ILLEGAL or just a literal "?"
+				tt = token.ILLEGAL
+			}
+
 		case '+':
-			tt = token.PLUS
+			if next, ok := l.peek(); ok && next == '=' {
+				tt = token.PLUS_ASSIGN
+				tl = "+="
+				l.advance()
+			} else if next, ok := l.peek(); ok && next == '+' {
+				tt = token.INC
+				tl = "++"
+				l.advance()
+			} else {
+				tt = token.PLUS
+			}
 		case '-':
-			tt = token.MINUS
+			if next, ok := l.peek(); ok && next == '=' {
+				tt = token.MINUS_ASSIGN
+				tl = "-="
+				l.advance()
+			} else if next, ok := l.peek(); ok && next == '-' {
+				tt = token.DEC
+				tl = "--"
+				l.advance()
+			} else {
+				tt = token.MINUS
+			}
 		case '*':
-			tt = token.MUL
+			if next, ok := l.peek(); ok && next == '=' {
+				tt = token.MUL_ASSIGN
+				tl = "*="
+				l.advance()
+			} else {
+				tt = token.MUL
+			}
 		case '/':
-			tt = token.DIV
+			if next, ok := l.peek(); ok && next == '=' {
+				tt = token.DIV_ASSIGN
+				tl = "/="
+				l.advance()
+			} else {
+				tt = token.DIV
+			}
 		case '%':
-			tt = token.MOD
+			if next, ok := l.peek(); ok && next == '=' {
+				tt = token.MOD_ASSIGN
+				tl = "%="
+				l.advance()
+			} else {
+				tt = token.MOD
+			}
 		case '[':
 			tt = token.LBRACKET
 		case ']':
@@ -536,7 +611,13 @@ func (l *Lexer) NextToken() token.Token {
 
 		// Possible operators
 		case '^':
-			tt = token.BITWISE_XOR
+			if next, ok := l.peek(); ok && next == '=' {
+				tt = token.XOR_ASSIGN
+				tl = "^="
+				l.advance()
+			} else {
+				tt = token.BITWISE_XOR
+			}
 
 		case '~':
 			tt = token.BITWISE_NOT
@@ -545,6 +626,10 @@ func (l *Lexer) NextToken() token.Token {
 			if next, ok := l.peek(); ok && next == '|' {
 				tt = token.OR
 				tl = "||"
+				l.advance()
+			} else if next, ok := l.peek(); ok && next == '=' {
+				tt = token.OR_ASSIGN
+				tl = "|="
 				l.advance()
 			} else {
 				tt = token.BITWISE_OR
@@ -555,6 +640,10 @@ func (l *Lexer) NextToken() token.Token {
 				tt = token.AND
 				tl = "&&"
 				l.advance()
+			} else if next, ok := l.peek(); ok && next == '=' {
+				tt = token.AND_ASSIGN
+				tl = "&="
+				l.advance()
 			} else {
 				tt = token.BITWISE_AND
 			}
@@ -563,6 +652,10 @@ func (l *Lexer) NextToken() token.Token {
 			if next, ok := l.peek(); ok && next == '=' {
 				tt = token.EQ
 				tl = "=="
+				l.advance()
+			} else if next, ok := l.peek(); ok && next == '>' {
+				tt = token.ARROW
+				tl = "=>"
 				l.advance()
 			} else {
 				tt = token.ASSIGN
@@ -574,9 +667,16 @@ func (l *Lexer) NextToken() token.Token {
 				tl = "<="
 				l.advance()
 			} else if next, ok := l.peek(); ok && next == '<' {
-				tt = token.BITSHIFTL
-				tl = "<<"
-				l.advance()
+				// Handle <<=
+				l.advance() // Eat first <
+				if nextnext, ok := l.peek(); ok && nextnext == '=' {
+					tt = token.SHL_ASSIGN
+					tl = "<<="
+					l.advance()
+				} else {
+					tt = token.BITSHIFTL
+					tl = "<<"
+				}
 			} else {
 				tt = token.LANGLE
 			}
@@ -587,9 +687,16 @@ func (l *Lexer) NextToken() token.Token {
 				tl = ">="
 				l.advance()
 			} else if next, ok := l.peek(); ok && next == '>' {
-				tt = token.BITSHIFTR
-				tl = ">>"
-				l.advance()
+				// Handle >>=
+				l.advance() // Eat first >
+				if nextnext, ok := l.peek(); ok && nextnext == '=' {
+					tt = token.SHR_ASSIGN
+					tl = ">>="
+					l.advance()
+				} else {
+					tt = token.BITSHIFTR
+					tl = ">>"
+				}
 			} else {
 				tt = token.RANGLE
 			}

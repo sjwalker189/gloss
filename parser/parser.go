@@ -1,12 +1,17 @@
 package parser
 
 import (
+	"fmt"
 	"gloss/ast"
 	"gloss/diagnostic"
 	"gloss/lexer"
 	"gloss/token"
 	"strconv"
 )
+
+func dump(v any) {
+	fmt.Printf("%+v\n", v)
+}
 
 type (
 	unaryExprParseFunc  func() ast.Expression
@@ -23,6 +28,8 @@ type Parser struct {
 
 	unaryExprParseFunc  map[token.TokenType]unaryExprParseFunc
 	binaryExprParseFunc map[token.TokenType]binaryExprParseFunc
+
+	typeDepth int // track generic type depth
 }
 
 func NewParser(l *lexer.Lexer) *Parser {
@@ -135,6 +142,8 @@ func (p *Parser) parseDeclarations() ast.Node {
 		return p.parseStruct()
 	case token.LET:
 		return p.parseLetStatement()
+	case token.CONST:
+		return p.parseConstStatement()
 	case token.FUNC:
 		return p.parseFunc()
 	// TODO: Following only present to support testing, should move to parseStatements only
@@ -173,18 +182,56 @@ func (p *Parser) parseStatements() ast.Node {
 }
 
 func (p *Parser) parseLetStatement() *ast.LetStatement {
-	let := &ast.LetStatement{}
+	stmt := &ast.LetStatement{}
 	if !p.expectNext(token.IDENT, "Expected name") {
 		return nil
 	}
-	let.Name = &ast.Identifier{Name: p.curToken.Literal}
+	stmt.Name = &ast.Identifier{Name: p.curToken.Literal}
 
-	if !p.expectNext(token.ASSIGN, "Expected '='") {
+	if p.peekToken.Type == token.COLON {
+		p.nextToken()
+		p.nextToken()
+		stmt.Type = p.parseType()
+
+		if p.peekToken.Type == token.RANGLE {
+			p.nextToken()
+		}
+	}
+
+	if p.peekToken.Type != token.ASSIGN {
+		return stmt
+	}
+
+	p.nextToken()
+	p.nextToken()
+
+	stmt.Value = p.parseExpression(LOWEST)
+	return stmt
+}
+
+func (p *Parser) parseConstStatement() *ast.ConstStatement {
+	stmt := &ast.ConstStatement{}
+	if !p.expectNext(token.IDENT, "Expected name") {
 		return nil
 	}
+
+	stmt.Name = &ast.Identifier{Name: p.curToken.Literal}
+
+	if p.peekToken.Type == token.COLON {
+		p.nextToken()
+		p.nextToken()
+		stmt.Type = p.parseType()
+
+		if p.peekToken.Type == token.RANGLE {
+			p.nextToken()
+		}
+	}
+
+	p.expectNext(token.ASSIGN, "Expected =")
 	p.nextToken()
-	let.Value = p.parseExpression(LOWEST)
-	return let
+	stmt.Value = p.parseExpression(LOWEST)
+
+	return stmt
 }
 
 func (p *Parser) parseFunc() *ast.Func {
@@ -371,30 +418,69 @@ func (p *Parser) parseType() ast.Type {
 	switch p.curToken.Type {
 	case token.LBRACE:
 		return p.parseStructBody()
-	case token.TYPE_INT, token.TYPE_BOOL, token.TYPE_STRING:
-		return &ast.TypeLiteral{Type: p.curToken.Literal}
-	case token.IDENT:
-		t := &ast.TypeIdentifier{Name: p.curToken.Literal}
-		if p.peekToken.Type == token.LANGLE {
-			p.nextToken()
-			t.Parameters = p.parseTypeParameters()
-		}
-		return t
 	default:
-		return nil
+		// TODO: Should this be an exhaustive case?
+		t := &ast.TypeIdentifier{
+			Name: &ast.Identifier{Name: p.curToken.Literal},
+		}
+
+		if p.peekToken.Type == token.LANGLE {
+			depth := p.typeDepth
+			p.nextToken()
+
+			t.Parameters = p.parseTypeParameters()
+
+			for {
+				if p.typeDepth == depth {
+					break
+				}
+				if p.typeDepth > 2 {
+					switch p.peekToken.Type {
+					case token.BITSHIFTR:
+						p.nextToken()
+						p.typeDepth -= 2
+					case token.RANGLE:
+						p.nextToken()
+						p.typeDepth--
+					default:
+						p.Diagnostics.Error(p.peekToken, "Expected >")
+					}
+				}
+			}
+		}
+
+		return t
 	}
 }
 
-func (p *Parser) parseTypeParameters() []*ast.TypeParameter {
-	var params []*ast.TypeParameter
-	for p.peekToken.Type != token.RANGLE && p.peekToken.Type != token.EOF {
+func (p *Parser) parseTypeParameters() []ast.Type {
+	var params []ast.Type
+
+	for p.peekToken.Type != token.RANGLE &&
+		p.peekToken.Type != token.BITSHIFTR && // Allow >> here
+		p.peekToken.Type != token.EOF {
+
 		p.nextToken()
-		params = append(params, &ast.TypeParameter{Name: p.curToken.Literal})
+		typ := p.parseType()
+		if typ != nil {
+			params = append(params, typ)
+		}
+
 		if p.peekToken.Type == token.COMMA {
 			p.nextToken()
 		}
 	}
-	p.expectNext(token.RANGLE, "Expected '>'")
+
+	// Logic to consume the closing bracket
+	if p.peekToken.Type == token.BITSHIFTR {
+		// "Split" the >> by transforming it into a >
+		// and leaving the other > for the next caller
+		p.peekToken.Type = token.RANGLE
+		p.peekToken.Literal = ">"
+		// We don't call nextToken() yet because the parent
+		// parseType call will consume this "new" RANGLE
+	}
+
 	return params
 }
 
@@ -444,8 +530,10 @@ func (p *Parser) parseIfStatement() *ast.If {
 // Expressions (Pratt)
 
 func (p *Parser) parseExpression(precedence int) ast.Expression {
+	fmt.Printf("DEBUG: Starting parseExpression. curToken: %s (%s)\n", p.curToken.Literal, p.curToken.Type)
 	prefix := p.unaryExprParseFunc[p.curToken.Type]
 	if prefix == nil {
+		fmt.Printf("DEBUG: No prefix function found for %s\n", p.curToken.Type)
 		return nil
 	}
 	leftExp := prefix()

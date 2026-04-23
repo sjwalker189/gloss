@@ -5,48 +5,54 @@ import "gloss/token"
 const (
 	_ int = iota
 	LOWEST
-	OR          // or
-	AND         // and
-	BITWISE_OR  // | or ^
-	BITWISE_AND // &
-	EQUALS      // == or !=
-	LESSGREATER // > or < or >= or <=
-	BITSHIFT    // << or >>
-	SUM         // + or -
-	PRODUCT     // * or / or %
-	PREFIX      // -X or !X or ~X
-	CALL        // fn(X)
+	ASSIGN
+	LOGICAL_OR
+	LOGICAL_AND
+	BITWISE_OR
+	BITWISE_XOR
+	BITWISE_AND
+	EQUALITY
+	RELATIONAL
+	SHIFT
+	ADD
+	MULT
+	UNARAY
+	PREFIX
+	CALL
+	MEMBER
+	POSTFIX
+	INDEX
 )
 
 var precedences = map[token.TokenType]int{
 	// Equality and Logic
-	token.EQ:     EQUALS,
-	token.NOT_EQ: EQUALS,
-	token.AND:    AND,
-	token.OR:     OR,
+	token.EQ:     EQUALITY,
+	token.NOT_EQ: EQUALITY,
+	token.AND:    LOGICAL_AND,
+	token.OR:     LOGICAL_OR,
 
 	// Comparisons
-	token.LANGLE: LESSGREATER,
-	token.RANGLE: LESSGREATER,
+	token.LANGLE: RELATIONAL,
+	token.RANGLE: RELATIONAL,
 
-	token.LT:    LESSGREATER,
-	token.GT:    LESSGREATER,
-	token.LT_EQ: LESSGREATER,
-	token.GT_EQ: LESSGREATER,
+	token.LT:    RELATIONAL,
+	token.GT:    RELATIONAL,
+	token.LT_EQ: RELATIONAL,
+	token.GT_EQ: RELATIONAL,
 
 	// Bitwise
 	token.BITWISE_OR:  BITWISE_OR,
-	token.BITWISE_XOR: BITWISE_OR,
+	token.BITWISE_XOR: BITWISE_XOR,
 	token.BITWISE_AND: BITWISE_AND,
-	token.BITSHIFTL:   BITSHIFT,
-	token.BITSHIFTR:   BITSHIFT,
+	token.BITSHIFTL:   SHIFT,
+	token.BITSHIFTR:   SHIFT,
 
 	// Math
-	token.PLUS:  SUM,
-	token.MINUS: SUM,
-	token.MUL:   PRODUCT,
-	token.DIV:   PRODUCT,
-	token.MOD:   PRODUCT,
+	token.PLUS:  ADD,
+	token.MINUS: ADD,
+	token.MUL:   MULT,
+	token.DIV:   MULT,
+	token.MOD:   MULT,
 
 	// Access / Calls
 	token.LPAREN: CALL,

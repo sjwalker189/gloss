@@ -79,6 +79,7 @@ func TestNextToken(t *testing.T) {
 				{Type: token.FUNC, Literal: "fn"},
 				{Type: token.RETURN, Literal: "return"},
 				{Type: token.LET, Literal: "let"},
+				{Type: token.CONST, Literal: "const"},
 				{Type: token.IDENT, Literal: "foo"},
 				{Type: token.ILLEGAL, Literal: "#"},
 				{Type: token.BOOL, Literal: "true"},

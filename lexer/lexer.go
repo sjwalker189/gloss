@@ -17,6 +17,7 @@ var keywords = map[string]token.TokenType{
 	"default":  token.DEFAULT,
 	"return":   token.RETURN,
 	"let":      token.LET,
+	"const":    token.CONST,
 	"fn":       token.FUNC,
 	"enum":     token.ENUM,
 	"union":    token.UNION,

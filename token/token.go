@@ -65,6 +65,7 @@ const (
 
 	// Keywords
 	LET                 = "LET"
+	CONST               = "CONST"
 	FUNC                = "FUNC"
 	IMPORT              = "IMPORT"
 	ENUM                = "ENUM"

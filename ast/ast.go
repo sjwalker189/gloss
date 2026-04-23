@@ -73,6 +73,15 @@ type LetStatement struct {
 	BaseNode
 	Token token.Token
 	Name  *Identifier
+	Type  Type
+	Value Expression
+}
+
+type ConstStatement struct {
+	BaseNode
+	Token token.Token
+	Name  *Identifier
+	Type  Type
 	Value Expression
 }
 
@@ -110,18 +119,13 @@ type Parameter struct {
 
 type TypeIdentifier struct {
 	BaseNode
-	Name       string
-	Parameters []*TypeParameter
+	Name       *Identifier
+	Parameters []Type
 }
 
 type TypeParameter struct {
 	BaseNode
 	Name string
-}
-
-type TypeLiteral struct {
-	BaseNode
-	Type string
 }
 
 type Enum struct {
@@ -141,7 +145,7 @@ type Union struct {
 	BaseNode
 	Name       string
 	Fields     []*UnionField
-	Parameters []*TypeParameter
+	Parameters []Type
 }
 
 type UnionField struct {
@@ -154,7 +158,7 @@ type Func struct {
 	BaseNode
 	Name       string
 	Params     []*Parameter
-	TypeParams []*TypeParameter
+	TypeParams []Type
 	Body       *BlockStatement
 	ReturnType Type
 }
@@ -191,7 +195,7 @@ type Tuple struct {
 type Struct struct {
 	BaseNode
 	Name   string
-	Params []*TypeParameter
+	Params []Type
 	Fields []*StructField
 }
 
@@ -213,7 +217,6 @@ type TupleType struct {
 
 // Denote nodes which can be used as types
 func (n TypeIdentifier) typeNode() {}
-func (n TypeLiteral) typeNode()    {}
 func (n StructBody) typeNode()     {}
 
 // Denote expression nodes

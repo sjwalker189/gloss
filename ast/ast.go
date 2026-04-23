@@ -112,7 +112,7 @@ type For struct {
 
 type Parameter struct {
 	BaseNode
-	Name    string
+	Name    *Identifier
 	Type    Type
 	Default *Expression
 }
@@ -154,13 +154,18 @@ type UnionField struct {
 	Type Type // literal type | union type | struct body | type ref with or without parameters
 }
 
+type CompositeLiteral struct {
+	Type Type
+	Body Expression // OR { field: Expression }
+}
+
 type Func struct {
 	BaseNode
-	Name       string
-	Params     []*Parameter
-	TypeParams []Type
-	Body       *BlockStatement
-	ReturnType Type
+	Name           *Identifier
+	Parameters     []*Parameter
+	TypeParameters []Type
+	Body           *BlockStatement
+	ReturnType     Type
 }
 
 type ReturnStatement struct {
@@ -192,21 +197,21 @@ type Tuple struct {
 	Items []Type
 }
 
-type Struct struct {
+type StructDeclaration struct {
 	BaseNode
-	Name   string
-	Params []Type
-	Fields []*StructField
+	Name           *Identifier
+	TypeParameters []Type
+	Fields         []*FieldDeclaration
 }
 
 type StructBody struct {
 	BaseNode
-	Fields []*StructField
+	Fields []*FieldDeclaration
 }
 
-type StructField struct {
+type FieldDeclaration struct {
 	BaseNode
-	Name string
+	Name *Identifier
 	Type Type
 }
 

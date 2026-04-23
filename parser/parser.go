@@ -139,22 +139,14 @@ func (p *Parser) parseDeclarations() ast.Node {
 	case token.UNION:
 		return p.parseUnion()
 	case token.STRUCT:
-		return p.parseStruct()
+		return p.parseStructDeclaration()
 	case token.LET:
 		return p.parseLetStatement()
 	case token.CONST:
 		return p.parseConstStatement()
 	case token.FUNC:
 		return p.parseFunc()
-	// TODO: Following only present to support testing, should move to parseStatements only
-	case token.IF:
-		return p.parseIfStatement()
-	case token.LOOP:
-		return p.parseLoopStatement()
-	case token.FOR:
-		return p.parseForStatement()
 	default:
-		// TODO: Raise error
 		return nil
 	}
 }
@@ -239,47 +231,68 @@ func (p *Parser) parseFunc() *ast.Func {
 	if !p.expectNext(token.IDENT, "Expected name") {
 		return nil
 	}
-	fn.Name = p.curToken.Literal
+
+	fn.Name = &ast.Identifier{Name: p.curToken.Literal}
 
 	if p.peekToken.Type == token.LANGLE {
 		p.nextToken()
-		fn.TypeParams = p.parseTypeParameters()
+		fn.TypeParameters = p.parseTypeParameters()
+		p.expectNext(token.RANGLE, "Expected >")
 	}
 
 	if !p.expectNext(token.LPAREN, "Expected '('") {
 		return nil
 	}
-	fn.Params = p.parseFuncParams()
+	fn.Parameters = p.parseFuncParams()
 
 	if p.peekToken.Type != token.LBRACE {
 		p.nextToken()
 		fn.ReturnType = p.parseType()
+
+		if p.peekToken.Type == token.RANGLE {
+			p.nextToken()
+		}
 	}
 
-	if p.peekToken.Type == token.LBRACE {
-		p.nextToken()
-		fn.Body = p.parseBlockStatement()
+	if !p.expectNext(token.LBRACE, "expected {") {
+		return nil
 	}
+
+	fn.Body = p.parseBlockStatement()
 	return fn
 }
 
 func (p *Parser) parseFuncParams() []*ast.Parameter {
 	var params []*ast.Parameter
+
 	if p.peekToken.Type == token.RPAREN {
 		p.nextToken()
 		return params
 	}
+
 	for {
+		p.nextToken() // consume opening ( or previous ,
+
+		param := &ast.Parameter{Name: &ast.Identifier{Name: p.curToken.Literal}}
+		p.expectNext(token.COLON, "expected :")
 		p.nextToken()
-		param := &ast.Parameter{Name: p.curToken.Literal}
-		p.nextToken()
+
 		param.Type = p.parseType()
+		if param.Type == nil {
+			p.Diagnostics.Error(p.curToken, "expected type")
+		} else if p.peekToken.Type == token.RANGLE {
+			p.nextToken()
+		}
+
 		params = append(params, param)
+
 		if p.peekToken.Type != token.COMMA {
 			break
 		}
+
 		p.nextToken()
 	}
+
 	p.expectNext(token.RPAREN, "Expected ')'")
 	return params
 }
@@ -381,14 +394,18 @@ func (p *Parser) parseUnion() *ast.Union {
 	return u
 }
 
-func (p *Parser) parseStruct() *ast.Struct {
-	u := &ast.Struct{}
+func (p *Parser) parseStructDeclaration() *ast.StructDeclaration {
+	u := &ast.StructDeclaration{}
+
 	p.expectNext(token.IDENT, "Expected name")
-	u.Name = p.curToken.Literal
+	u.Name = &ast.Identifier{Name: p.curToken.Literal}
 
 	if p.peekToken.Type == token.LANGLE {
 		p.nextToken()
-		u.Params = p.parseTypeParameters()
+		u.TypeParameters = p.parseTypeParameters()
+		if p.peekToken.Type == token.RANGLE {
+			p.nextToken()
+		}
 	}
 
 	p.expectNext(token.LBRACE, "Expected '{'")
@@ -396,11 +413,15 @@ func (p *Parser) parseStruct() *ast.Struct {
 	for p.peekToken.Type != token.RBRACE && p.peekToken.Type != token.EOF {
 		p.nextToken()
 
-		f := &ast.StructField{Name: p.curToken.Literal}
+		f := &ast.FieldDeclaration{Name: &ast.Identifier{Name: p.curToken.Literal}}
 		p.expectNext(token.COLON, "Expected ':'")
 		p.nextToken()
 
 		f.Type = p.parseType()
+		if p.peekToken.Type == token.RANGLE {
+			p.nextToken()
+		}
+
 		u.Fields = append(u.Fields, f)
 
 		if p.peekToken.Type == token.COMMA {
@@ -488,10 +509,13 @@ func (p *Parser) parseStructBody() *ast.StructBody {
 	body := &ast.StructBody{}
 	for p.peekToken.Type != token.RBRACE && p.peekToken.Type != token.EOF {
 		p.nextToken()
-		field := &ast.StructField{Name: p.curToken.Literal}
+		field := &ast.FieldDeclaration{Name: &ast.Identifier{Name: p.curToken.Literal}}
 		p.expectNext(token.COLON, "Expected ':'")
 		p.nextToken()
 		field.Type = p.parseType()
+		if p.peekToken.Type == token.RANGLE {
+			p.nextToken()
+		}
 		body.Fields = append(body.Fields, field)
 		if p.peekToken.Type == token.COMMA {
 			p.nextToken()

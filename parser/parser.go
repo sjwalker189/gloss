@@ -43,13 +43,15 @@ func NewParser(l *lexer.Lexer) *Parser {
 
 func (p *Parser) init() {
 	p.unaryExprParseFunc = map[token.TokenType]unaryExprParseFunc{
-		token.BOOL:   p.parseBoolean,
-		token.INT:    p.parseIntegerLiteral,
-		token.STRING: p.parseStringLiteral,
-		token.IDENT:  p.parseIdent,
-		token.MINUS:  p.parseUnaryExpression,
-		token.BANG:   p.parseUnaryExpression,
-		token.LPAREN: p.parseGroupedExpression,
+		token.BOOL:     p.parseBoolean,
+		token.INT:      p.parseIntegerLiteral,
+		token.STRING:   p.parseStringLiteral,
+		token.IDENT:    p.parseIdent,
+		token.MINUS:    p.parseUnaryExpression,
+		token.BANG:     p.parseUnaryExpression,
+		token.LPAREN:   p.parseGroupedExpression,
+		token.LBRACE:   p.parseAnonymousCompositeLiteral,
+		token.LBRACKET: p.parseArrayTypeExpression,
 	}
 
 	p.binaryExprParseFunc = map[token.TokenType]binaryExprParseFunc{
@@ -83,6 +85,7 @@ func (p *Parser) init() {
 		token.BITSHIFTR:   p.parseBinaryExpression,
 
 		token.LPAREN: p.parseCallExpression,
+		token.LBRACE: p.parseCompositeLiteral,
 	}
 	p.nextToken()
 	p.nextToken()
@@ -629,4 +632,63 @@ func (p *Parser) parseCallExpression(fn ast.Expression) ast.Expression {
 	}
 	p.expectNext(token.RPAREN, "Expected ')'")
 	return exp
+}
+
+func (p *Parser) parseCompositeLiteral(left ast.Expression) ast.Expression {
+	lit := &ast.CompositeLiteral{
+		Type: left,
+	}
+
+	p.nextToken() // move past {
+
+	for p.curToken.Type != token.RBRACE && p.curToken.Type != token.EOF {
+		element := p.parseCompositeElement()
+		if element != nil {
+			lit.Elements = append(lit.Elements, element)
+		}
+
+		if p.peekToken.Type == token.COMMA {
+			p.nextToken()
+		}
+		p.nextToken() // This moves to the start of the next element or the '}'
+	}
+
+	return lit
+}
+
+func (p *Parser) parseCompositeElement() ast.Expression {
+	val := p.parseExpression(LOWEST)
+
+	if p.peekToken.Type == token.COLON {
+		p.nextToken() // Move to ':'
+		p.nextToken() // Move to start of value
+
+		return &ast.KeyValuePair{
+			Key:   val,
+			Value: p.parseExpression(LOWEST),
+		}
+	}
+
+	return val
+}
+
+func (p *Parser) parseAnonymousCompositeLiteral() ast.Expression {
+	// This represents a literal where the type is inferred, e.g., { id: 1 }
+	return p.parseCompositeLiteral(nil)
+}
+
+func (p *Parser) parseArrayTypeExpression() ast.Expression {
+	// curToken is '['. Move to ']'
+	// TODO: can pre-allocate size with int next token?
+	if !p.expectNext(token.RBRACKET, "Expected ']'") {
+		return nil
+	}
+
+	p.nextToken()
+
+	return &ast.ArrayTypeExpression{
+		// Use a high precedence so we don't accidentally
+		// consume the '{' inside this prefix function
+		BaseType: p.parseExpression(PREFIX),
+	}
 }

@@ -19,6 +19,7 @@ const (
 	UNARAY
 	PREFIX
 	CALL
+	COMPOSITE
 	MEMBER
 	POSTFIX
 	INDEX
@@ -56,4 +57,5 @@ var precedences = map[token.TokenType]int{
 
 	// Access / Calls
 	token.LPAREN: CALL,
+	token.LBRACE: COMPOSITE,
 }

@@ -154,9 +154,21 @@ type UnionField struct {
 	Type Type // literal type | union type | struct body | type ref with or without parameters
 }
 
+type ArrayTypeExpression struct {
+	BaseNode
+	BaseType Expression
+}
+
 type CompositeLiteral struct {
-	Type Type
-	Body Expression // OR { field: Expression }
+	BaseNode
+	Type     Expression
+	Elements []Expression
+}
+
+type KeyValuePair struct {
+	BaseNode
+	Key   Expression
+	Value Expression
 }
 
 type Func struct {
@@ -225,14 +237,17 @@ func (n TypeIdentifier) typeNode() {}
 func (n StructBody) typeNode()     {}
 
 // Denote expression nodes
-func (e BinaryExpression) expressionNode() {}
-func (e UnaryExpression) expressionNode()  {}
-func (e ParenExpression) expressionNode()  {}
-func (e CallExpression) expressionNode()   {}
-func (e IntegerLiteral) expressionNode()   {}
-func (e StringLiteral) expressionNode()    {}
-func (e Boolean) expressionNode()          {}
-func (e Identifier) expressionNode()       {}
+func (e BinaryExpression) expressionNode()    {}
+func (e UnaryExpression) expressionNode()     {}
+func (e ParenExpression) expressionNode()     {}
+func (e CallExpression) expressionNode()      {}
+func (e IntegerLiteral) expressionNode()      {}
+func (e StringLiteral) expressionNode()       {}
+func (e ArrayTypeExpression) expressionNode() {}
+func (e CompositeLiteral) expressionNode()    {}
+func (e KeyValuePair) expressionNode()        {}
+func (e Boolean) expressionNode()             {}
+func (e Identifier) expressionNode()          {}
 
 // Denote alternative nodes (those that can be chained with if)
 func (n If) alternativeNode()             {}

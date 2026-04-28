@@ -232,9 +232,15 @@ type TupleType struct {
 	Fields []Type
 }
 
+type ArrayType struct {
+	BaseNode
+	ElementType Type
+}
+
 // Denote nodes which can be used as types
 func (n TypeIdentifier) typeNode() {}
 func (n StructBody) typeNode()     {}
+func (n ArrayType) typeNode()      {}
 
 // Denote expression nodes
 func (e BinaryExpression) expressionNode()    {}

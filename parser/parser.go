@@ -440,6 +440,19 @@ func (p *Parser) parseStructDeclaration() *ast.StructDeclaration {
 
 func (p *Parser) parseType() ast.Type {
 	switch p.curToken.Type {
+	case token.LBRACKET:
+		if !p.expectNext(token.RBRACKET, "Expected ]") {
+			// TODO: consider tuple syntax like: [string, int]
+			return nil
+		}
+		array := &ast.ArrayType{}
+		p.nextToken()
+		array.ElementType = p.parseType()
+		if array.ElementType == nil {
+			// TODO: raise error
+		}
+		return array
+
 	case token.LBRACE:
 		return p.parseStructBody()
 	default:

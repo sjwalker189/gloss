@@ -46,15 +46,18 @@ func NewParser(l *lexer.Lexer) *Parser {
 
 func (p *Parser) init() {
 	p.unaryExprParseFunc = map[token.TokenType]unaryExprParseFunc{
-		token.BOOL:     p.parseBoolean,
-		token.INT:      p.parseIntegerLiteral,
-		token.STRING:   p.parseStringLiteral,
-		token.IDENT:    p.parseIdent,
-		token.MINUS:    p.parseUnaryExpression,
-		token.BANG:     p.parseUnaryExpression,
-		token.LPAREN:   p.parseGroupedExpression,
-		token.LBRACE:   p.parseAnonymousCompositeLiteral,
-		token.LBRACKET: p.parseArrayTypeExpression,
+		token.BOOL:        p.parseBoolean,
+		token.INT:         p.parseIntegerLiteral,
+		token.STRING:      p.parseStringLiteral,
+		token.IDENT:       p.parseIdent,
+		token.TYPE_INT:    p.parseIdent,
+		token.TYPE_STRING: p.parseIdent,
+		token.TYPE_BOOL:   p.parseIdent,
+		token.MINUS:       p.parseUnaryExpression,
+		token.BANG:        p.parseUnaryExpression,
+		token.LPAREN:      p.parseGroupedExpression,
+		token.LBRACE:      p.parseAnonymousCompositeLiteral,
+		token.LBRACKET:    p.parseArrayTypeExpression,
 	}
 
 	p.binaryExprParseFunc = map[token.TokenType]binaryExprParseFunc{
@@ -367,16 +370,16 @@ func (p *Parser) parseForStatement() ast.Iter {
 		}
 
 		p.nextToken()
+		p.allowCompositeLiterals = false
 		exp := p.parseExpression(LOWEST)
+		p.allowCompositeLiterals = true
 		if exp == nil {
 			p.Diagnostics.Error(p.curToken, "Expected expression to follow")
 			return nil
 		}
 
-		p.allowCompositeLiterals = false
 		loop.Iterable = exp
-		p.allowCompositeLiterals = true
-		p.expectNext(token.LBRACKET, "expected {")
+		p.expectNext(token.LBRACE, "expected {")
 		loop.Body = p.parseBlockStatement()
 		return loop
 	}
@@ -782,9 +785,19 @@ func (p *Parser) parseArrayTypeExpression() ast.Expression {
 
 	p.nextToken()
 
-	return &ast.ArrayTypeExpression{
+	arrayType := &ast.ArrayTypeExpression{
 		// Use a high precedence so we don't accidentally
 		// consume the '{' inside this prefix function
 		BaseType: p.parseExpression(PREFIX),
 	}
+
+	// When composite literals are disallowed in the outer context (e.g. for-each
+	// iterable), the infix loop won't consume '{'. Eagerly parse it here so that
+	// []Type{...} literals still work in those positions.
+	if !p.allowCompositeLiterals && p.peekToken.Type == token.LBRACE {
+		p.nextToken() // move to '{'
+		return p.parseCompositeLiteral(arrayType)
+	}
+
+	return arrayType
 }

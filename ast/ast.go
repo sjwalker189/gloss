@@ -63,21 +63,25 @@ type Identifier struct {
 }
 
 type BinaryExpression struct {
+	BaseNode
 	Left     Expression
 	Right    Expression
 	Operator string
 }
 
 type UnaryExpression struct {
+	BaseNode
 	Right    Expression
 	Operator string
 }
 
 type ParenExpression struct {
+	BaseNode
 	Expression Expression
 }
 
 type CallExpression struct {
+	BaseNode
 	Function  Expression
 	Arguments []Expression
 }

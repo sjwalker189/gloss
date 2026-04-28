@@ -42,12 +42,30 @@ func TestForInLoop(t *testing.T) {
 			Iterable: &ast.Identifier{Name: "items"},
 			Body:     &ast.BlockStatement{},
 		},
-		// &ast.ForEach{
-		// 	Key:      &ast.Identifier{Name: "_"},
-		// 	Value:    &ast.Identifier{Name: "val"},
-		// 	Iterable: &ast.Identifier{Name: "items"},
-		// 	Body:     &ast.BlockStatement{},
-		// },
+	)
+	assertParse(t, input, want)
+}
+
+func TestForInLoopArrayLiteral(t *testing.T) {
+	input := statements(`
+		for k, v in []int{1, 2, 3} {}
+	`)
+	want := source(
+		&ast.ForEach{
+			Key:   &ast.Identifier{Name: "k"},
+			Value: &ast.Identifier{Name: "v"},
+			Iterable: &ast.CompositeLiteral{
+				Type: &ast.ArrayTypeExpression{
+					BaseType: &ast.Identifier{Name: "int"},
+				},
+				Elements: []ast.Expression{
+					&ast.IntegerLiteral{Value: 1},
+					&ast.IntegerLiteral{Value: 2},
+					&ast.IntegerLiteral{Value: 3},
+				},
+			},
+			Body: &ast.BlockStatement{},
+		},
 	)
 	assertParse(t, input, want)
 }

@@ -27,19 +27,33 @@ type Node interface {
 }
 
 type Type interface {
+	Node
 	typeNode()
 }
 
 type Expression interface {
+	Node
 	expressionNode()
 }
 
+type TypeExpression interface {
+	Node
+	typeNode()
+}
+
 type Statement interface {
+	Node
 	statementNode()
 }
 
 type Alternative interface {
+	Node
 	alternativeNode()
+}
+
+type Iter interface {
+	Node
+	iterNode()
 }
 
 type Identifier struct {
@@ -106,8 +120,18 @@ type Loop struct {
 
 type For struct {
 	BaseNode
+	Init      *LetStatement
 	Condition Expression
+	Post      Expression
 	Body      *BlockStatement
+}
+
+type ForEach struct {
+	BaseNode
+	Key      *Identifier
+	Value    *Identifier
+	Iterable Expression
+	Body     *BlockStatement
 }
 
 type Parameter struct {
@@ -258,3 +282,8 @@ func (e Identifier) expressionNode()          {}
 // Denote alternative nodes (those that can be chained with if)
 func (n If) alternativeNode()             {}
 func (n BlockStatement) alternativeNode() {}
+
+// Denote loop nodes
+func (n Loop) iterNode()    {}
+func (n For) iterNode()     {}
+func (n ForEach) iterNode() {}

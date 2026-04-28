@@ -63,7 +63,7 @@ func TestNextToken(t *testing.T) {
 		},
 		{
 			name:  "Keyword tokens",
-			input: "enum struct union if else switch case default break continue for fn return let foo # true false",
+			input: "enum struct union if else switch case default break continue for fn return let const foo # true false in",
 			want: []token.Token{
 				{Type: token.ENUM, Literal: "enum"},
 				{Type: token.STRUCT, Literal: "struct"},
@@ -84,6 +84,7 @@ func TestNextToken(t *testing.T) {
 				{Type: token.ILLEGAL, Literal: "#"},
 				{Type: token.BOOL, Literal: "true"},
 				{Type: token.BOOL, Literal: "false"},
+				{Type: token.IN, Literal: "in"},
 				{Type: token.EOF},
 			},
 		},

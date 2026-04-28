@@ -30,12 +30,15 @@ type Parser struct {
 	binaryExprParseFunc map[token.TokenType]binaryExprParseFunc
 
 	typeDepth int // track generic type depth
+
+	allowCompositeLiterals bool
 }
 
 func NewParser(l *lexer.Lexer) *Parser {
 	p := &Parser{
-		lexer:       l,
-		Diagnostics: &diagnostic.MessageList{},
+		lexer:                  l,
+		Diagnostics:            &diagnostic.MessageList{},
+		allowCompositeLiterals: true,
 	}
 	p.init()
 	return p
@@ -158,6 +161,8 @@ func (p *Parser) parseStatements() ast.Node {
 	switch p.curToken.Type {
 	case token.LET:
 		return p.parseLetStatement()
+	case token.CONST:
+		return p.parseConstStatement()
 	case token.LOOP:
 		return p.parseLoopStatement()
 	case token.FOR:
@@ -323,19 +328,93 @@ func (p *Parser) parseBlockStatement() *ast.BlockStatement {
 	return block
 }
 
-func (p *Parser) parseLoopStatement() *ast.Loop {
+func (p *Parser) parseLoopStatement() ast.Iter {
 	loop := &ast.Loop{}
 	p.expectNext(token.LBRACE, "Expected '{'")
 	loop.Body = p.parseBlockStatement()
 	return loop
 }
 
-func (p *Parser) parseForStatement() *ast.For {
-	loop := &ast.For{}
-	p.nextToken()
+func (p *Parser) parseForStatement() ast.Iter {
+	// 1. Infinite loop (same as loop {})
+	if p.peekToken.Type == token.LBRACE {
+		p.nextToken() // move to {
+		return &ast.For{
+			Body: p.parseBlockStatement(),
+		}
+	}
+
+	if !p.expectNext(token.IDENT, "expected identifier") {
+		return nil
+	}
+
+	firstIdent := &ast.Identifier{Name: p.curToken.Literal}
+
+	if p.peekToken.Type == token.COMMA {
+		p.nextToken() // consume comma
+		if !p.expectNext(token.IDENT, "Expected second identifier") {
+			return nil
+		}
+		secondIdent := &ast.Identifier{Name: p.curToken.Literal}
+
+		loop := &ast.ForEach{
+			Key:   firstIdent,
+			Value: secondIdent,
+		}
+
+		if !p.expectNext(token.IN, "expected 'in' keyword") {
+			return nil
+		}
+
+		p.nextToken()
+		exp := p.parseExpression(LOWEST)
+		if exp == nil {
+			p.Diagnostics.Error(p.curToken, "Expected expression to follow")
+			return nil
+		}
+
+		p.allowCompositeLiterals = false
+		loop.Iterable = exp
+		p.allowCompositeLiterals = true
+		p.expectNext(token.LBRACKET, "expected {")
+		loop.Body = p.parseBlockStatement()
+		return loop
+	}
+
+	loop := &ast.For{
+		Init: p.parseLetStatement(),
+	}
+
+	if loop.Init == nil {
+		p.Diagnostics.Error(p.curToken, "expected initializer")
+		return nil
+	}
+
+	if !p.expectNext(token.SEMICOLON, "expected ;") {
+		return nil
+	}
+
+	p.allowCompositeLiterals = false
 	loop.Condition = p.parseExpression(LOWEST)
+	p.allowCompositeLiterals = true
+	if loop.Condition == nil {
+		p.Diagnostics.Error(p.curToken, "expected initializer")
+		return nil
+	}
+
+	if !p.expectNext(token.SEMICOLON, "expected ;") {
+		return nil
+	}
+
+	loop.Post = p.parseExpression(LOWEST)
+	if loop.Post == nil {
+		p.Diagnostics.Error(p.curToken, "expected post expression")
+		return nil
+	}
+
 	p.expectNext(token.LBRACE, "Expected '{'")
 	loop.Body = p.parseBlockStatement()
+
 	return loop
 }
 
@@ -547,7 +626,9 @@ func (p *Parser) parseIfStatement() *ast.If {
 	stmt := &ast.If{}
 	p.nextToken()
 
+	p.allowCompositeLiterals = false
 	stmt.Condition = p.parseExpression(LOWEST)
+	p.allowCompositeLiterals = true
 
 	p.expectNext(token.LBRACE, "Expected '{'")
 	stmt.Then = p.parseBlockStatement()
@@ -570,15 +651,17 @@ func (p *Parser) parseIfStatement() *ast.If {
 // Expressions (Pratt)
 
 func (p *Parser) parseExpression(precedence int) ast.Expression {
-	fmt.Printf("DEBUG: Starting parseExpression. curToken: %s (%s)\n", p.curToken.Literal, p.curToken.Type)
 	prefix := p.unaryExprParseFunc[p.curToken.Type]
 	if prefix == nil {
-		fmt.Printf("DEBUG: No prefix function found for %s\n", p.curToken.Type)
 		return nil
 	}
 	leftExp := prefix()
 
-	for p.peekToken.Type != token.SEMICOLON && p.peekToken.Type != token.RBRACE && precedence < p.peekPrecedence() {
+	for p.peekToken.Type != token.SEMICOLON &&
+		p.peekToken.Type != token.RBRACE &&
+		!(p.peekToken.Type == token.LBRACE && !p.allowCompositeLiterals) &&
+		precedence < p.peekPrecedence() {
+
 		infix := p.binaryExprParseFunc[p.peekToken.Type]
 		if infix == nil {
 			return leftExp
